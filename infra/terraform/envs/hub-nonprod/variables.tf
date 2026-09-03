@@ -56,7 +56,7 @@ variable "github_repo_subjects" {
 
 variable "dev_artifacts_bucket_name" {
   type        = string
-  description = "Dev artifacts bucket (LLD Dev Artifacts Bucket)."
+  description = "Dev artifacts bucket for pipeline build outputs."
 }
 
 variable "create_dev_test_endpoint" {

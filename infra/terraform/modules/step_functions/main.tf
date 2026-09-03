@@ -30,7 +30,7 @@ resource "aws_sfn_state_machine" "pipeline_trigger" {
   tags     = var.tags
 
   definition = jsonencode({
-    Comment = "Trigger SageMaker pipeline (LLD: DEV Trigger Pipeline / PROD Trigger Deployment)"
+    Comment = "Trigger SageMaker pipeline (DEV pipeline trigger / PROD deploy trigger)"
     StartAt = "StartPipeline"
     States = {
       StartPipeline = {

@@ -9,18 +9,18 @@ variable "data_bucket_name" {
 
 variable "artifacts_bucket_name" {
   type        = string
-  description = "Model artifact bucket (LLD: Model Artifact Bucket / hub registry artifacts)."
+  description = "Model artifact bucket for registered models and pipeline outputs."
 }
 
 variable "dev_artifacts_bucket_name" {
   type        = string
-  description = "Dev Git/pipeline artifacts bucket (LLD: Dev Artifacts Bucket)."
+  description = "Dev Git/pipeline artifacts bucket."
 }
 
 variable "prod_data_bucket_name" {
   type        = string
   default     = null
-  description = "Optional PROD data bucket (LLD: Prod Data Bucket)."
+  description = "Optional PROD data bucket."
 }
 
 variable "ecr_repository_name" {

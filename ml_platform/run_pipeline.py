@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Start a SageMaker Pipeline execution (LLD flow 1→7: GHA → pipeline trigger)."""
+"""Start a SageMaker Pipeline execution (GHA → pipeline trigger)."""
 
 from __future__ import annotations
 

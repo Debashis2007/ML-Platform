@@ -12,11 +12,11 @@ infra/terraform/
     iam/                  # Pipeline, training, inference, GHA OIDC roles
     registry/             # Model Package Group + RAM share to spokes
     governance/           # EventBridge, Lambda, DynamoDB audit table
-    secrets/              # Secrets Manager placeholders (LLD DEV zone)
+    secrets/              # Secrets Manager placeholders (DEV zone)
     evaluation-pipeline/  # SSM + S3 paths for Train→Evaluate→Register pipeline
-    step_functions/       # Pipeline trigger state machine (LLD flow 7)
+    step_functions/       # Pipeline and deploy trigger state machines
     sns/                  # Alert topic for Model Monitor alarms
-    api_gateway/          # HTTP API → Lambda → SageMaker endpoint (LLD flow 14)
+    api_gateway/          # HTTP API → Lambda → SageMaker endpoint
     cloudwatch/           # Pipeline + endpoint dashboards
     endpoint/             # SageMaker endpoint from approved package (Workflow B)
     monitoring/           # CloudWatch alarms on endpoint
@@ -58,7 +58,7 @@ Creates prod data bucket, prod evaluation pipeline config, SNS alerts, deploy tr
 
 ### Pass 2 — endpoint deploy (`envs/deploy-endpoint`)
 
-Triggered after Senior DS approves a model package (Workflow B / LLD flows 11–15):
+Triggered after Senior DS approves a model package (Workflow B):
 
 ```bash
 cd infra/terraform/envs/deploy-endpoint
@@ -78,7 +78,7 @@ Or via GitHub Actions `model-deploy.yml` (reads SSM `/mlp-hub-nonprod/deploy/mod
 | **Platform (Terraform)** | `modules/evaluation-pipeline/` | SSM config, log group, S3 evaluation prefix |
 | **DAG (Python SDK)** | `ml_platform/steps/` | Preprocess, Train, Evaluate, CheckMetric, Register steps |
 
-CI upserts and starts the pipeline (Workflow A / LLD flows 1–7):
+CI upserts and starts the pipeline (Workflow A):
 
 ```bash
 python ml_platform/build_pipeline.py \

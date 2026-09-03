@@ -8,7 +8,7 @@ import boto3
 def handler(event, context):
     """Capture Model Package state change → DynamoDB; publish deploy signal on Approved.
 
-    LLD flow 11: registry approval → EventBridge → Lambda → DynamoDB → Workflow B.
+    Registry approval → EventBridge → Lambda → DynamoDB → Workflow B.
     """
     detail = event.get("detail", event)
     table_name = os.environ.get("GOVERNANCE_TABLE", "MLPlatformStageGovernance")
