@@ -1,0 +1,19 @@
+model: credit-risk
+owner_bu: demo
+steps:
+  features:
+    enabled: false
+  train:
+    enabled: true
+    instance: ml.m5.xlarge
+  evaluate:
+    enabled: true
+  conditional_register:
+    enabled: true
+    metric: auc
+    threshold: 0.75
+deployment:
+  target: bu-account
+  account_id: BU-dev
+data:
+  train_uri: s3://ml-platform-data/credit-risk/train/

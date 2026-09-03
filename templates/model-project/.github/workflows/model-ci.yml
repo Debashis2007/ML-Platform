@@ -1,0 +1,37 @@
+name: Model CI — train & register
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "examples/**"
+      - "templates/**"
+      - "ml_platform/**"
+      - ".github/workflows/model-ci.yml"
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  train:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install -r requirements.txt
+      - name: Validate pipeline.yaml
+        run: python -c "from ml_platform.config import PipelineConfig; PipelineConfig.load('examples/credit-risk/pipeline.yaml')"
+      - name: Build pipeline definition
+        run: python ml_platform/build_pipeline.py --config examples/credit-risk/pipeline.yaml
+      - name: Configure AWS (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.MLP_GHA_PIPELINE_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+      - name: Docker build & push ECR
+        run: echo "Push image to ml-platform-models ECR — wire account/region in platform-infra"
+      - name: Upsert & start SageMaker Pipeline
+        run: echo "Upsert pipeline and start execution — set SM role + data URI via secrets"

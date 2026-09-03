@@ -1,0 +1,35 @@
+# ML-Platform repository
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.env
+*.egg-info/
+dist/
+build/
+
+# SageMaker / ML
+*.joblib
+*.pkl
+output/
+mlruns/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+.DS_Store
+
+# Terraform (future)
+.terraform/
+*.tfstate
+*.tfstate.*
+
+# Secrets
+*.pem
+credentials
+
+# Optional large AWS icon pack (download separately for PPT icon rendering)
+assets/AWS_Architecture_Icons/
