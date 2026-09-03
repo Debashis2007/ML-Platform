@@ -22,7 +22,7 @@ mlruns/
 *.swp
 .DS_Store
 
-# Terraform (future)
+# Terraform (when added under infra/)
 .terraform/
 *.tfstate
 *.tfstate.*
@@ -30,6 +30,3 @@ mlruns/
 # Secrets
 *.pem
 credentials
-
-# Optional large AWS icon pack (download separately for PPT icon rendering)
-assets/AWS_Architecture_Icons/
