@@ -1,0 +1,14 @@
+# Copy to terraform.tfvars and fill in account-specific values.
+
+aws_region               = "us-east-1"
+name_prefix              = "mlp-hub-nonprod"
+vpc_id                   = "vpc-xxxxxxxx"
+subnet_ids               = ["subnet-aaa", "subnet-bbb"]
+data_bucket_name         = "ml-platform-data-ACCOUNT_ID"
+artifacts_bucket_name    = "ml-platform-artifacts-ACCOUNT_ID"
+ecr_repository_name      = "ml-platform-models"
+model_package_group_name = "ModelCreditRisk"
+spoke_account_ids        = ["111111111111", "222222222222"]
+
+# github_oidc_provider_arn = "arn:aws:iam::ACCOUNT_ID:oidc-provider/token.actions.githubusercontent.com"
+# github_repo_subjects     = ["repo:Debashis2007/ML-Platform:ref:refs/heads/main"]

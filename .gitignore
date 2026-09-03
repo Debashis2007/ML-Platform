@@ -22,10 +22,12 @@ mlruns/
 *.swp
 .DS_Store
 
-# Terraform (when added under infra/)
+# Terraform
 .terraform/
 *.tfstate
 *.tfstate.*
+infra/terraform/envs/**/.build/
+infra/terraform/modules/governance/build/
 
 # Secrets
 *.pem

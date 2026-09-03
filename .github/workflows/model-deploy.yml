@@ -2,6 +2,10 @@ name: Model deploy — approve to endpoint
 
 on:
   workflow_dispatch:
+    inputs:
+      model_package_arn:
+        description: Approved SageMaker Model Package ARN
+        required: true
   repository_dispatch:
     types: [model-approved]
 
@@ -12,16 +16,29 @@ permissions:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: infra/terraform/envs/deploy-endpoint
     steps:
       - uses: actions/checkout@v4
       - uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ secrets.MLP_GHA_DEPLOY_ROLE_ARN }}
           aws-region: ${{ vars.AWS_REGION }}
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.9.0
+      - name: Terraform init
+        run: terraform init
       - name: Terraform apply endpoint
-        run: |
-          echo "terraform apply -var model_package_arn=${{ github.event.client_payload.model_package_arn }}"
+        env:
+          TF_VAR_model_package_arn: ${{ github.event.inputs.model_package_arn || github.event.client_payload.model_package_arn }}
+          TF_VAR_vpc_id: ${{ vars.MLP_VPC_ID }}
+          TF_VAR_subnet_ids: ${{ vars.MLP_SUBNET_IDS }}
+          TF_VAR_inference_role_arn: ${{ vars.MLP_INFERENCE_ROLE_ARN }}
+          TF_VAR_endpoint_name: ${{ vars.MLP_ENDPOINT_NAME || 'credit-risk' }}
+        run: terraform apply -auto-approve
       - name: Smoke test /invocations
-        run: echo "curl POST endpoint with sample features payload"
+        run: echo "POST /invocations with sample features payload"
       - name: Attach Model Monitor
         run: echo "Enable data capture + baseline"

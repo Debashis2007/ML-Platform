@@ -8,35 +8,39 @@ Adapted from [AWS Guidance: multi-account ML model governance](https://github.co
 
 | Path | Purpose |
 |------|---------|
-| `deployment/` | **Infrastructure (CloudFormation)** — hub, spoke, KMS, governance stacks |
-| `ml_platform/` | Pipeline builder, step library, config |
-| `examples/credit-risk/` | Lighthouse model (`preprocess.py`, `train.py`, `evaluate.py`, `register.py`) |
+| `infra/terraform/` | **Terraform modules** — factory, evaluation-pipeline, endpoint deploy |
+| `deployment/` | CloudFormation (AWS guidance sample) — Wave-1 alternative |
+| `ml_platform/` | Pipeline builder + evaluation step modules |
+| `examples/credit-risk/` | Lighthouse model |
 | `templates/model-project/` | GitHub template for new model repos |
-| `lambdas/` | Governance event capture + endpoint invoke handlers |
-| `.github/workflows/` | Workflow A (CI/train) and Workflow B (deploy) — stubs until infra is wired |
-| `source/` | AWS sample notebooks for manual validation |
+| `lambdas/` | Governance capture + endpoint invoke |
+| `.github/workflows/` | Workflow A (CI), B (deploy), C (platform-infra) |
+| `source/` | AWS sample notebooks |
 
-## Infrastructure — what exists today
+## Infrastructure
 
-**CloudFormation** lives under `deployment/` (from the AWS guidance sample):
+**Terraform** (`infra/terraform/`) — modular factory:
 
-| Step | File | Account |
-|------|------|---------|
-| 1a | `step1a-hub-sagemaker-domain-userprofile.yaml` | Hub |
-| 1b | `step1b-hubaccount-model-package-share.yaml` | Hub |
-| 1c | `step1c-hubaccount-model-governance-resources.yaml` | Hub |
-| 2 | `step2-dev-spoke-sagemaker-domain-userprofile.yaml` | Dev spoke |
-| 3 | `step3-test-spoke-sagemaker-domain-userprofile.yaml` | Test spoke |
-| 4–6 | `step4`–`step6` KMS cross-account policies | Hub + spokes |
-| — | `stacksets_roles/` | StackSet admin/execution roles |
+| Module | Purpose |
+|--------|---------|
+| `network` | SageMaker security group in existing VPC |
+| `storage` | S3 data/artifacts buckets, ECR |
+| `iam` | Pipeline, training, inference, GHA OIDC roles |
+| `registry` | Model Package Group + RAM share |
+| `governance` | EventBridge → Lambda → DynamoDB |
+| `evaluation-pipeline` | SSM + S3 paths for Train→Evaluate→Register |
+| `endpoint` | Deploy approved package (Workflow B) |
+| `monitoring` | CloudWatch alarms |
 
-Deploy hub stacks in order, then spokes, then KMS policies. See the [AWS sample README](https://github.com/aws-solutions-library-samples/guidance-for-multi-account-machine-learning-model-governance-on-aws) for parameters.
+```bash
+cd infra/terraform/envs/hub-nonprod
+cp terraform.tfvars.example terraform.tfvars
+terraform init && terraform apply
+```
 
-## Terraform — not in this repo yet
+**CloudFormation** (`deployment/`) — AWS guidance sample for hub/spoke/KMS (Wave-1 alternative).
 
-There is **no `infra/` or `.tf` code** in this repository. Workflow B (`.github/workflows/model-deploy.yml`) and the model lifecycle below reference Terraform endpoint deploy as the **target** pattern; that module still needs to be added (e.g. under `infra/terraform/`).
-
-Wave-1 foundation can be stood up with the CloudFormation templates above; Terraform would cover shared factory resources (VPC endpoints, ECR, registry, endpoint modules) when implemented.
+See `infra/terraform/README.md` for Pass 1 (factory) vs Pass 2 (endpoint) apply order.
 
 ## Quick start — pipeline factory
 
@@ -54,7 +58,7 @@ python ml_platform/build_pipeline.py --config examples/credit-risk/pipeline.yaml
 GitHub push → Workflow A → ECR → SageMaker Pipeline
   → Preprocess → Train → Evaluate → Condition → Register (Pending)
   → Senior DS Approve → EventBridge → Lambda → DynamoDB
-  → Workflow B → endpoint deploy (Terraform — TBD) → Model Monitor
+  → Workflow B → terraform apply (endpoint module) → Model Monitor
 ```
 
 ## Serving contract
