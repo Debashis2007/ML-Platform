@@ -8,7 +8,7 @@ import boto3
 def handler(event, context):
     """Capture Model Package state change → DynamoDB (hub governance stack).
 
-    Mirrors AWS guidance step1c EventBridge → Lambda → DynamoDB pattern.
+    EventBridge → Lambda → DynamoDB audit trail.
     Table name from env GOVERNANCE_TABLE (default: MLPlatformStageGovernance).
     """
     detail = event.get("detail", event)

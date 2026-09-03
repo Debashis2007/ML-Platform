@@ -1,4 +1,4 @@
-"""Invoke SageMaker endpoint — adapted from AWS guidance source/invoke-model-endpoint-lambda.py."""
+"""Invoke SageMaker endpoint."""
 
 import json
 import os
