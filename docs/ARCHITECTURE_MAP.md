@@ -1,7 +1,5 @@
 # Platform LLD — code mapping
 
-Reference diagram: [`PLATFORM_LLD.drawio`](PLATFORM_LLD.drawio)
-
 ## Zones → repository paths
 
 | LLD zone | Components | Code |

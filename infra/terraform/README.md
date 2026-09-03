@@ -1,6 +1,6 @@
 # Terraform infrastructure for the ML Platform.
 
-Reference: [`docs/PLATFORM_LLD.drawio`](../../docs/PLATFORM_LLD.drawio) and [`docs/ARCHITECTURE_MAP.md`](../../docs/ARCHITECTURE_MAP.md).
+Reference: [`docs/ARCHITECTURE_MAP.md`](../../docs/ARCHITECTURE_MAP.md).
 
 ## Layout
 

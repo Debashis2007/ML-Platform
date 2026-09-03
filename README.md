@@ -7,7 +7,7 @@ Multi-account **Machine Learning Platform** on AWS — SageMaker pipeline factor
 | Path | Purpose |
 |------|---------|
 | `infra/terraform/` | **Terraform modules** — DEV/PROD factory, evaluation-pipeline, endpoint deploy |
-| `docs/` | `PLATFORM_LLD.drawio` reference diagram + `ARCHITECTURE_MAP.md` |
+| `docs/` | Architecture mapping (`ARCHITECTURE_MAP.md`) |
 | `deployment/` | CloudFormation templates — hub/spoke, KMS, governance |
 | `ml_platform/` | Pipeline builder + evaluation step modules |
 | `examples/credit-risk/` | Lighthouse model |
