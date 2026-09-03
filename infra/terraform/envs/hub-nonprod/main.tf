@@ -34,11 +34,19 @@ module "network" {
 module "storage" {
   source = "../../modules/storage"
 
-  name_prefix           = var.name_prefix
-  data_bucket_name      = var.data_bucket_name
-  artifacts_bucket_name = var.artifacts_bucket_name
-  ecr_repository_name   = var.ecr_repository_name
-  tags                  = var.tags
+  name_prefix               = var.name_prefix
+  data_bucket_name          = var.data_bucket_name
+  dev_artifacts_bucket_name = var.dev_artifacts_bucket_name
+  artifacts_bucket_name     = var.artifacts_bucket_name
+  ecr_repository_name       = var.ecr_repository_name
+  tags                      = var.tags
+}
+
+module "secrets" {
+  source = "../../modules/secrets"
+
+  name_prefix = var.name_prefix
+  tags        = var.tags
 }
 
 module "iam" {
@@ -68,6 +76,7 @@ module "governance" {
   name_prefix              = var.name_prefix
   model_package_group_name = var.model_package_group_name
   lambda_source_dir        = "${path.module}/.build"
+  deploy_parameter_prefix  = "/${var.name_prefix}/deploy"
   tags                     = var.tags
 }
 
@@ -87,4 +96,36 @@ module "credit_risk_pipeline" {
   evaluate_instance_type   = "ml.m5.xlarge"
   features_enabled         = false
   tags                     = var.tags
+}
+
+module "pipeline_trigger" {
+  source = "../../modules/step_functions"
+
+  name_prefix       = var.name_prefix
+  pipeline_name     = "credit-risk"
+  pipeline_role_arn = module.iam.pipeline_role_arn
+  tags              = var.tags
+}
+
+module "cloudwatch" {
+  source = "../../modules/cloudwatch"
+
+  name_prefix    = var.name_prefix
+  pipeline_names = ["credit-risk"]
+  tags           = var.tags
+}
+
+module "dev_test_endpoint" {
+  source = "../../modules/endpoint"
+  count  = var.create_dev_test_endpoint ? 1 : 0
+
+  name_prefix        = var.name_prefix
+  model_package_arn  = var.dev_test_model_package_arn
+  endpoint_name      = "${var.name_prefix}-credit-risk-test"
+  inference_role_arn = module.iam.inference_role_arn
+  subnet_ids         = module.network.subnet_ids
+  security_group_ids = [module.network.sagemaker_security_group_id]
+  instance_type      = "ml.m5.large"
+  instance_count     = 1
+  tags               = var.tags
 }

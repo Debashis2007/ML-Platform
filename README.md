@@ -6,7 +6,8 @@ Multi-account **Machine Learning Platform** on AWS — SageMaker pipeline factor
 
 | Path | Purpose |
 |------|---------|
-| `infra/terraform/` | **Terraform modules** — factory, evaluation-pipeline, endpoint deploy |
+| `infra/terraform/` | **Terraform modules** — DEV/PROD factory, evaluation-pipeline, endpoint deploy |
+| `docs/` | `PLATFORM_LLD.drawio` reference diagram + `ARCHITECTURE_MAP.md` |
 | `deployment/` | CloudFormation templates — hub/spoke, KMS, governance |
 | `ml_platform/` | Pipeline builder + evaluation step modules |
 | `examples/credit-risk/` | Lighthouse model |
@@ -28,10 +29,21 @@ Multi-account **Machine Learning Platform** on AWS — SageMaker pipeline factor
 | `governance` | EventBridge → Lambda → DynamoDB |
 | `evaluation-pipeline` | SSM + S3 paths for Train→Evaluate→Register |
 | `endpoint` | Deploy approved package (Workflow B) |
-| `monitoring` | CloudWatch alarms |
+| `monitoring` | CloudWatch alarms + SNS |
+| `step_functions` | Pipeline / deploy trigger (LLD flow 7) |
+| `api_gateway` | HTTP API for `/invocations` (LLD flow 14) |
+| `sns` | Alert topic for prod monitoring |
+| `secrets` | Secrets Manager placeholders |
+| `cloudwatch` | Pipeline + endpoint dashboards |
 
 ```bash
+# DEV zone (Pass 1a)
 cd infra/terraform/envs/hub-nonprod
+cp terraform.tfvars.example terraform.tfvars
+terraform init && terraform apply
+
+# PROD zone (Pass 1b)
+cd infra/terraform/envs/hub-prod
 cp terraform.tfvars.example terraform.tfvars
 terraform init && terraform apply
 ```

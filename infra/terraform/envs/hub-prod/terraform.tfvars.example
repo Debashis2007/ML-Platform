@@ -1,0 +1,11 @@
+aws_region                 = "us-east-1"
+name_prefix                = "mlp-hub-prod"
+vpc_id                     = "vpc-xxxxxxxx"
+subnet_ids                 = ["subnet-aaa", "subnet-bbb"]
+data_bucket_name           = "mlp-prod-shared-data"
+prod_data_bucket_name      = "mlp-prod-model-data"
+dev_artifacts_bucket_name  = "mlp-prod-build-artifacts"
+artifacts_bucket_name      = "mlp-prod-model-artifacts"
+pipeline_role_arn          = "arn:aws:iam::123456789012:role/mlp-pipeline"
+training_role_arn          = "arn:aws:iam::123456789012:role/mlp-training"
+endpoint_name              = "credit-risk"

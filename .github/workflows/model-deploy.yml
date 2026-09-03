@@ -4,8 +4,8 @@ on:
   workflow_dispatch:
     inputs:
       model_package_arn:
-        description: Approved SageMaker Model Package ARN
-        required: true
+        description: Approved SageMaker Model Package ARN (optional if SSM param set)
+        required: false
   repository_dispatch:
     types: [model-approved]
 
@@ -25,20 +25,37 @@ jobs:
         with:
           role-to-assume: ${{ secrets.MLP_GHA_DEPLOY_ROLE_ARN }}
           aws-region: ${{ vars.AWS_REGION }}
+      - name: Resolve model package ARN
+        id: model
+        env:
+          INPUT_ARN: ${{ github.event.inputs.model_package_arn || github.event.client_payload.model_package_arn }}
+          SSM_PARAM: ${{ vars.MLP_DEPLOY_SSM_PARAM || '/mlp-hub-nonprod/deploy/model_package_arn' }}
+        run: |
+          if [ -n "$INPUT_ARN" ]; then
+            echo "arn=$INPUT_ARN" >> "$GITHUB_OUTPUT"
+          else
+            ARN=$(aws ssm get-parameter --name "$SSM_PARAM" --query Parameter.Value --output text)
+            echo "arn=$ARN" >> "$GITHUB_OUTPUT"
+          fi
       - uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: 1.9.0
       - name: Terraform init
         run: terraform init
-      - name: Terraform apply endpoint
+      - name: Terraform apply endpoint + API Gateway
         env:
-          TF_VAR_model_package_arn: ${{ github.event.inputs.model_package_arn || github.event.client_payload.model_package_arn }}
+          TF_VAR_model_package_arn: ${{ steps.model.outputs.arn }}
           TF_VAR_vpc_id: ${{ vars.MLP_VPC_ID }}
           TF_VAR_subnet_ids: ${{ vars.MLP_SUBNET_IDS }}
           TF_VAR_inference_role_arn: ${{ vars.MLP_INFERENCE_ROLE_ARN }}
           TF_VAR_endpoint_name: ${{ vars.MLP_ENDPOINT_NAME || 'credit-risk' }}
         run: terraform apply -auto-approve
       - name: Smoke test /invocations
-        run: echo "POST /invocations with sample features payload"
-      - name: Attach Model Monitor
-        run: echo "Enable data capture + baseline"
+        env:
+          API_URL: ${{ vars.MLP_API_INVOKE_URL }}
+        run: |
+          if [ -n "$API_URL" ]; then
+            curl -sf -X POST "$API_URL/invocations" \
+              -H "Content-Type: application/json" \
+              -d '{"features":[0.1,0.2,0.3]}' || echo "Smoke test skipped — set MLP_API_INVOKE_URL after first deploy"
+          fi

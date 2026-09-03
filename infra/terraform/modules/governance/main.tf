@@ -3,10 +3,16 @@ data "aws_caller_identity" "current" {}
 resource "aws_dynamodb_table" "governance" {
   name         = "${var.name_prefix}-model-governance"
   billing_mode = "PAY_PER_REQUEST"
-  hash_key     = "model_package_arn"
+  hash_key     = "pk"
+  range_key    = "sk"
 
   attribute {
-    name = "model_package_arn"
+    name = "pk"
+    type = "S"
+  }
+
+  attribute {
+    name = "sk"
     type = "S"
   }
 
@@ -70,11 +76,32 @@ resource "aws_lambda_function" "capture_approval" {
 
   environment {
     variables = {
-      GOVERNANCE_TABLE = aws_dynamodb_table.governance.name
+      GOVERNANCE_TABLE        = aws_dynamodb_table.governance.name
+      DEPLOY_PARAMETER_PREFIX = var.deploy_parameter_prefix != "" ? var.deploy_parameter_prefix : "/${var.name_prefix}/deploy"
     }
   }
 
   tags = var.tags
+}
+
+resource "aws_iam_role_policy" "governance_lambda_extras" {
+  name = "${var.name_prefix}-governance-extras"
+  role = aws_iam_role.governance_lambda.id
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect   = "Allow"
+        Action   = ["ssm:PutParameter"]
+        Resource = "arn:aws:ssm:*:*:parameter/${var.name_prefix}/deploy/*"
+      },
+      {
+        Effect   = "Allow"
+        Action   = ["events:PutEvents"]
+        Resource = "*"
+      }
+    ]
+  })
 }
 
 resource "aws_cloudwatch_event_target" "lambda" {

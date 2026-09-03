@@ -1,5 +1,6 @@
 model: credit-risk
 owner_bu: demo
+environment: dev
 steps:
   features:
     enabled: false

@@ -9,7 +9,18 @@ variable "data_bucket_name" {
 
 variable "artifacts_bucket_name" {
   type        = string
-  description = "Globally unique S3 bucket for model artifacts and pipeline outputs."
+  description = "Model artifact bucket (LLD: Model Artifact Bucket / hub registry artifacts)."
+}
+
+variable "dev_artifacts_bucket_name" {
+  type        = string
+  description = "Dev Git/pipeline artifacts bucket (LLD: Dev Artifacts Bucket)."
+}
+
+variable "prod_data_bucket_name" {
+  type        = string
+  default     = null
+  description = "Optional PROD data bucket (LLD: Prod Data Bucket)."
 }
 
 variable "ecr_repository_name" {

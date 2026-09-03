@@ -12,6 +12,12 @@ variable "lambda_source_dir" {
   default     = ""
 }
 
+variable "deploy_parameter_prefix" {
+  type    = string
+  default = ""
+  description = "SSM prefix for latest approved model package ARN (Workflow B input)."
+}
+
 variable "tags" {
   type    = map(string)
   default = {}

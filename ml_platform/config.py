@@ -17,6 +17,7 @@ class PipelineConfig:
     threshold_metric: str
     threshold_min: float
     deployment_target: str
+    environment: str
     train_instance: str
     features_enabled: bool
 
@@ -29,6 +30,7 @@ class PipelineConfig:
         train = steps.get("train", {})
         cond = steps.get("conditional_register", {})
         deploy = data.get("deployment", {})
+        env = str(data.get("environment", deploy.get("environment", "dev")))
         threshold = cond.get("threshold", cond.get("metric", {}))
         if isinstance(threshold, dict):
             metric = threshold.get("metric", cond.get("metric", "auc"))
@@ -45,6 +47,7 @@ class PipelineConfig:
             threshold_metric=str(metric),
             threshold_min=min_val,
             deployment_target=str(deploy.get("target", "central")),
+            environment=env,
             train_instance=str(train.get("instance", "ml.m5.xlarge")),
             features_enabled=bool(steps.get("features", {}).get("enabled", False)),
         )

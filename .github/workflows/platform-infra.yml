@@ -18,6 +18,7 @@ on:
         type: choice
         options:
           - hub-nonprod
+          - hub-prod
           - deploy-endpoint
 
 permissions:

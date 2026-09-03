@@ -5,11 +5,21 @@ terraform {
       source  = "hashicorp/aws"
       version = ">= 5.0"
     }
+    archive = {
+      source  = "hashicorp/archive"
+      version = ">= 2.4"
+    }
   }
 }
 
 provider "aws" {
   region = var.aws_region
+}
+
+data "archive_file" "invoke_endpoint_lambda" {
+  type        = "zip"
+  source_dir  = "${path.module}/../../../lambdas/invoke_endpoint"
+  output_path = "${path.module}/.build/invoke_endpoint.zip"
 }
 
 module "network" {
@@ -18,6 +28,13 @@ module "network" {
   name_prefix = var.name_prefix
   vpc_id      = var.vpc_id
   subnet_ids  = var.subnet_ids
+  tags        = var.tags
+}
+
+module "sns" {
+  source = "../../modules/sns"
+
+  name_prefix = var.name_prefix
   tags        = var.tags
 }
 
@@ -36,11 +53,29 @@ module "endpoint" {
   tags               = var.tags
 }
 
+module "api_gateway" {
+  source = "../../modules/api_gateway"
+
+  name_prefix        = var.name_prefix
+  endpoint_name      = module.endpoint.endpoint_name
+  lambda_zip_path    = data.archive_file.invoke_endpoint_lambda.output_path
+  lambda_source_hash = data.archive_file.invoke_endpoint_lambda.output_base64sha256
+  tags               = var.tags
+}
+
 module "monitoring" {
   source = "../../modules/monitoring"
 
-  name_prefix    = var.name_prefix
-  endpoint_name  = module.endpoint.endpoint_name
-  alarm_actions  = var.alarm_actions
-  tags           = var.tags
+  name_prefix   = var.name_prefix
+  endpoint_name = module.endpoint.endpoint_name
+  alarm_actions = [module.sns.alerts_topic_arn]
+  tags          = var.tags
+}
+
+module "cloudwatch" {
+  source = "../../modules/cloudwatch"
+
+  name_prefix   = var.name_prefix
+  endpoint_name = module.endpoint.endpoint_name
+  tags          = var.tags
 }

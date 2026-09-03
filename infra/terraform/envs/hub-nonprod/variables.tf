@@ -54,6 +54,21 @@ variable "github_repo_subjects" {
   default = []
 }
 
+variable "dev_artifacts_bucket_name" {
+  type        = string
+  description = "Dev artifacts bucket (LLD Dev Artifacts Bucket)."
+}
+
+variable "create_dev_test_endpoint" {
+  type    = bool
+  default = false
+}
+
+variable "dev_test_model_package_arn" {
+  type    = string
+  default = ""
+}
+
 variable "tags" {
   type    = map(string)
   default = { Environment = "hub-nonprod", ManagedBy = "terraform" }
