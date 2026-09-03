@@ -67,4 +67,4 @@ python ml_platform/build_pipeline.py \
 
 ## CloudFormation
 
-Existing `deployment/` CFN templates remain valid for Wave-1. Terraform modules above are the target factory layout and can replace CFN incrementally.
+The `deployment/` CloudFormation templates can be used alongside or instead of Terraform for hub/spoke and KMS setup.

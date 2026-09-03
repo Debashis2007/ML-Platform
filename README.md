@@ -1,21 +1,19 @@
 # ML-Platform
 
-Multi-account **Machine Learning Platform** on AWS — SageMaker pipeline factory and model governance.
-
-Adapted from [AWS Guidance: multi-account ML model governance](https://github.com/aws-solutions-library-samples/guidance-for-multi-account-machine-learning-model-governance-on-aws), extended with GitHub Actions CI/CD, hub/spoke accounts, and SageMaker Model Registry as system of record.
+Multi-account **Machine Learning Platform** on AWS — SageMaker pipeline factory, GitHub Actions CI/CD, hub/spoke accounts, and SageMaker Model Registry as system of record.
 
 ## Repository layout
 
 | Path | Purpose |
 |------|---------|
 | `infra/terraform/` | **Terraform modules** — factory, evaluation-pipeline, endpoint deploy |
-| `deployment/` | CloudFormation (AWS guidance sample) — Wave-1 alternative |
+| `deployment/` | CloudFormation templates — hub/spoke, KMS, governance |
 | `ml_platform/` | Pipeline builder + evaluation step modules |
 | `examples/credit-risk/` | Lighthouse model |
 | `templates/model-project/` | GitHub template for new model repos |
 | `lambdas/` | Governance capture + endpoint invoke |
 | `.github/workflows/` | Workflow A (CI), B (deploy), C (platform-infra) |
-| `source/` | AWS sample notebooks |
+| `source/` | Reference notebooks for validation |
 
 ## Infrastructure
 
@@ -38,7 +36,7 @@ cp terraform.tfvars.example terraform.tfvars
 terraform init && terraform apply
 ```
 
-**CloudFormation** (`deployment/`) — AWS guidance sample for hub/spoke/KMS (Wave-1 alternative).
+**CloudFormation** (`deployment/`) — hub/spoke SageMaker domains, model sharing, governance, and KMS cross-account policies.
 
 See `infra/terraform/README.md` for Pass 1 (factory) vs Pass 2 (endpoint) apply order.
 
@@ -71,4 +69,4 @@ Response: { "prediction": <value>, "score": <0..1>, "model_version": "credit-ris
 
 ## License
 
-MIT-0 (inherits AWS sample license).
+MIT-0
