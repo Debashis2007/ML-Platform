@@ -31,10 +31,11 @@ locals {
 module "network" {
   source = "../../modules/network"
 
-  name_prefix = var.name_prefix
-  vpc_id      = var.vpc_id
-  subnet_ids  = var.subnet_ids
-  tags        = var.tags
+  name_prefix          = var.name_prefix
+  vpc_id               = var.vpc_id
+  subnet_ids           = var.subnet_ids
+  enable_vpc_endpoints = var.enable_vpc_endpoints
+  tags                 = var.tags
 }
 
 module "sns" {
@@ -64,6 +65,13 @@ module "endpoint" {
   tags                  = var.tags
 }
 
+module "api_gateway_account" {
+  source = "../../modules/api_gateway_account"
+  count  = var.enable_api_gateway ? 1 : 0
+
+  cloudwatch_role_arn = var.apigateway_cloudwatch_role_arn
+}
+
 module "api_gateway" {
   source = "../../modules/api_gateway"
   count  = var.enable_api_gateway ? 1 : 0
@@ -73,8 +81,11 @@ module "api_gateway" {
   endpoint_arn       = module.endpoint.endpoint_arn
   lambda_zip_path    = data.archive_file.invoke_endpoint_lambda.output_path
   lambda_source_hash = data.archive_file.invoke_endpoint_lambda.output_base64sha256
+  lambda_role_arn    = var.invoke_lambda_role_arn
   enable_iam_auth    = var.enable_api_iam_auth
   tags               = var.tags
+
+  depends_on = [module.api_gateway_account]
 }
 
 module "waf" {

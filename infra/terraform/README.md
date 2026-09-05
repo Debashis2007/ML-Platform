@@ -9,14 +9,14 @@ infra/terraform/
   modules/
     network/              # VPC attachment, SageMaker security group
     storage/              # S3 data, dev/prod artifacts, prod data, ECR
-    iam/                  # Pipeline, training, inference, GHA OIDC roles
+    iam/                  # README only — roles are client-managed (see docs/CLIENT_MANAGED_IAM_ROLES.md)
     registry/             # Model Package Group + RAM share to spokes
-    governance/           # EventBridge, Lambda, DynamoDB audit table
+    governance/           # EventBridge, Lambda, DynamoDB (Lambda role ARN input)
     secrets/              # Secrets Manager placeholders (DEV zone)
     evaluation-pipeline/  # SSM + S3 paths for Train→Evaluate→Register pipeline
-    step_functions/       # Pipeline and deploy trigger state machines
+    step_functions/       # Pipeline and deploy trigger state machines (SFN role ARN input)
     sns/                  # Alert topic for Model Monitor alarms
-    api_gateway/          # HTTP API → Lambda → SageMaker endpoint
+    api_gateway/          # REST API → Lambda → SageMaker endpoint (+ WAF)
     cloudwatch/           # Pipeline + endpoint dashboards
     endpoint/             # SageMaker endpoint from approved package (Workflow B)
     monitoring/           # CloudWatch alarms on endpoint
@@ -26,24 +26,28 @@ infra/terraform/
     deploy-endpoint/      # Pass 2 — endpoint + API GW + monitoring (Workflow B)
 ```
 
+## IAM (client-managed)
+
+Terraform **does not create IAM roles**. The client creates roles manually and passes ARNs via `terraform.tfvars` / `TF_VAR_*`. Full inventory: [`docs/CLIENT_MANAGED_IAM_ROLES.md`](../../docs/CLIENT_MANAGED_IAM_ROLES.md).
+
 ## Apply order
 
 ### Pass 1a — DEV factory (`envs/hub-nonprod`)
 
 ```bash
 cd infra/terraform/envs/hub-nonprod
-cp terraform.tfvars.example terraform.tfvars   # edit VPC, buckets, spoke IDs
+cp terraform.tfvars.example terraform.tfvars   # edit VPC, buckets, spoke IDs, role ARNs
 terraform init
 terraform plan
 terraform apply
 ```
 
-Creates shared storage, IAM, registry, governance, evaluation pipeline hooks, Step Functions trigger, and optional dev test endpoint.
+Creates shared storage, registry, governance, evaluation pipeline hooks, Step Functions trigger, and optional DEV BU endpoints. **Requires client role ARNs in tfvars.**
 
-Wire GitHub secrets/vars from outputs:
+Wire GitHub secrets/vars (roles created by client, not Terraform outputs):
 
-- `MLP_GHA_PIPELINE_ROLE_ARN` ← `gha_pipeline_role_arn`
-- `MLP_GHA_DEPLOY_ROLE_ARN` ← `gha_deploy_role_arn`
+- `MLP_GHA_PIPELINE_ROLE_ARN` / `MLP_GHA_DEPLOY_ROLE_ARN` — client OIDC roles
+- `MLP_INFERENCE_ROLE_ARN`, `MLP_INVOKE_LAMBDA_ROLE_ARN`, `MLP_APIGW_CLOUDWATCH_ROLE_ARN`
 - `MLP_PIPELINE_ROLE_ARN`, `MLP_TRAIN_DATA_URI`, `MLP_PIPELINE_OUTPUT_PREFIX`
 
 ### Pass 1b — PROD factory (`envs/hub-prod`)

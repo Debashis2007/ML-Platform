@@ -37,6 +37,7 @@ module "api_gateway" {
   endpoint_arn       = module.endpoint[each.key].endpoint_arn
   lambda_zip_path    = var.lambda_zip_path
   lambda_source_hash = var.lambda_source_hash
+  lambda_role_arn    = var.invoke_lambda_role_arn
   enable_iam_auth    = var.enable_iam_auth
   tags = merge(var.tags, {
     BusinessUnit = each.key

@@ -70,6 +70,8 @@ def lambda_handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
         or event.get("business_unit")
         or os.environ.get("BUSINESS_UNIT", "")
     )
+    life_stage = os.environ.get("MODEL_LIFE_CYCLE_STAGE", "Production")
+    life_status = os.environ.get("MODEL_LIFE_CYCLE_STATUS", "Approved")
 
     sm = _sm()
     source = sm.describe_model_package(ModelPackageName=source_arn)
@@ -84,6 +86,11 @@ def lambda_handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
             + (f" for BU {business_unit}" if business_unit else "")
         ),
         "ModelApprovalStatus": approval,
+        "ModelLifeCycle": {
+            "Stage": life_stage,
+            "StageStatus": life_status,
+            "StageDescription": f"Promoted from {source_arn}",
+        },
         "InferenceSpecification": inference,
     }
     if source.get("CustomerMetadataProperties"):

@@ -21,6 +21,11 @@ variable "lambda_source_hash" {
   type = string
 }
 
+variable "lambda_role_arn" {
+  type        = string
+  description = "Client-managed IAM role ARN for invoke_endpoint Lambda."
+}
+
 variable "enable_iam_auth" {
   type        = bool
   description = "Require SigV4 (AWS_IAM) on POST /invocations. Recommended for production."
@@ -29,8 +34,18 @@ variable "enable_iam_auth" {
 
 variable "enable_access_logs" {
   type        = bool
-  description = "Enable API Gateway access logging."
+  description = "Enable API Gateway access logging and INFO execution logs."
   default     = true
+}
+
+variable "throttling_burst_limit" {
+  type    = number
+  default = 100
+}
+
+variable "throttling_rate_limit" {
+  type    = number
+  default = 50
 }
 
 variable "model_version" {

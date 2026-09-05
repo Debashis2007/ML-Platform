@@ -40,10 +40,11 @@ module "kms" {
 module "network" {
   source = "../../modules/network"
 
-  name_prefix = var.name_prefix
-  vpc_id      = var.vpc_id
-  subnet_ids  = var.subnet_ids
-  tags        = var.tags
+  name_prefix          = var.name_prefix
+  vpc_id               = var.vpc_id
+  subnet_ids           = var.subnet_ids
+  enable_vpc_endpoints = var.enable_vpc_endpoints
+  tags                 = var.tags
 }
 
 module "storage" {
@@ -67,18 +68,7 @@ module "secrets" {
   tags                  = var.tags
 }
 
-module "iam" {
-  source = "../../modules/iam"
-
-  name_prefix              = var.name_prefix
-  data_bucket_arn          = module.storage.data_bucket_arn
-  artifacts_bucket_arn     = module.storage.artifacts_bucket_arn
-  ecr_repository_arn       = module.storage.ecr_repository_arn
-  github_oidc_provider_arn = var.github_oidc_provider_arn
-  github_repo_subjects     = var.github_repo_subjects
-  kms_key_arn              = module.kms.key_arn
-  tags                     = var.tags
-}
+# IAM roles are client-managed — see docs/CLIENT_MANAGED_IAM_ROLES.md
 
 module "registry" {
   source = "../../modules/registry"
@@ -92,16 +82,18 @@ module "registry" {
 module "governance" {
   source = "../../modules/governance"
 
-  name_prefix              = var.name_prefix
-  model_package_group_name = var.model_package_group_name
-  lambda_source_dir        = "${path.module}/.build"
-  deploy_parameter_prefix  = "/${var.name_prefix}/deploy"
-  kms_key_arn              = module.kms.key_arn
-  enable_auto_deploy       = var.enable_auto_deploy
-  github_owner             = var.github_owner
-  github_repo              = var.github_repo
-  github_token_secret_arn  = coalesce(module.secrets.github_dispatch_secret_arn, "")
-  tags                     = var.tags
+  name_prefix                     = var.name_prefix
+  model_package_group_name        = var.model_package_group_name
+  lambda_source_dir               = "${path.module}/.build"
+  deploy_parameter_prefix         = "/${var.name_prefix}/deploy"
+  kms_key_arn                     = module.kms.key_arn
+  enable_auto_deploy              = var.enable_auto_deploy
+  github_owner                    = var.github_owner
+  github_repo                     = var.github_repo
+  github_token_secret_arn         = coalesce(module.secrets.github_dispatch_secret_arn, "")
+  governance_lambda_role_arn      = var.governance_lambda_role_arn
+  github_dispatch_lambda_role_arn = var.github_dispatch_lambda_role_arn
+  tags                            = var.tags
 
   depends_on = [
     data.archive_file.capture_approval_lambda,
@@ -122,8 +114,8 @@ module "credit_risk_pipeline" {
 
   name_prefix              = var.name_prefix
   model_name               = "credit-risk"
-  pipeline_role_arn        = module.iam.pipeline_role_arn
-  training_role_arn        = module.iam.training_role_arn
+  pipeline_role_arn        = var.pipeline_role_arn
+  training_role_arn        = var.training_role_arn
   artifacts_bucket_name    = module.storage.artifacts_bucket_name
   data_bucket_name         = module.storage.data_bucket_name
   model_package_group_name = module.registry.model_package_group_name
@@ -138,10 +130,10 @@ module "credit_risk_pipeline" {
 module "pipeline_trigger" {
   source = "../../modules/step_functions"
 
-  name_prefix       = var.name_prefix
-  pipeline_name     = "credit-risk"
-  pipeline_role_arn = module.iam.pipeline_role_arn
-  tags              = var.tags
+  name_prefix   = var.name_prefix
+  pipeline_name = "credit-risk"
+  sfn_role_arn  = var.step_functions_role_arn
+  tags          = var.tags
 }
 
 module "cloudwatch" {
@@ -160,18 +152,18 @@ module "stage_analytics" {
   governance_table_arn   = module.governance.governance_table_arn
   kms_key_arn            = module.kms.key_arn
   spill_bucket_name      = var.athena_spill_bucket_name
+  export_lambda_role_arn = var.stage_export_lambda_role_arn
   quicksight_user_arn    = var.quicksight_user_arn
   tags                   = var.tags
 }
 
-# Central Plane Non-Prod: per-BU SageMaker endpoints WITHOUT API Gateway.
 module "bu_endpoints" {
   source = "../../modules/bu_endpoints"
   count  = var.enable_bu_endpoints ? 1 : 0
 
   name_prefix           = var.name_prefix
   business_units        = var.business_units
-  inference_role_arn    = module.iam.inference_role_arn
+  inference_role_arn    = var.inference_role_arn
   subnet_ids            = module.network.subnet_ids
   security_group_ids    = [module.network.sagemaker_security_group_id]
   artifacts_bucket_name = module.storage.artifacts_bucket_name
@@ -180,7 +172,6 @@ module "bu_endpoints" {
   tags                  = var.tags
 }
 
-# Backward-compatible single test endpoint (prefer bu_endpoints for platform).
 module "dev_test_endpoint" {
   source = "../../modules/endpoint"
   count  = var.create_dev_test_endpoint ? 1 : 0
@@ -188,7 +179,7 @@ module "dev_test_endpoint" {
   name_prefix         = var.name_prefix
   model_package_arn   = var.dev_test_model_package_arn
   endpoint_name       = "${var.name_prefix}-credit-risk-test"
-  inference_role_arn  = module.iam.inference_role_arn
+  inference_role_arn  = var.inference_role_arn
   subnet_ids          = module.network.subnet_ids
   security_group_ids  = [module.network.sagemaker_security_group_id]
   instance_type       = "ml.m5.large"

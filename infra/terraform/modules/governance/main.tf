@@ -1,6 +1,3 @@
-data "aws_caller_identity" "current" {}
-data "aws_region" "current" {}
-
 resource "aws_dynamodb_table" "governance" {
   name         = "${var.name_prefix}-model-governance"
   billing_mode = "PAY_PER_REQUEST"
@@ -43,37 +40,6 @@ resource "aws_cloudwatch_event_rule" "model_package_state_change" {
   tags = var.tags
 }
 
-resource "aws_iam_role" "governance_lambda" {
-  name = "${var.name_prefix}-governance-lambda"
-  assume_role_policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [{
-      Effect    = "Allow"
-      Principal = { Service = "lambda.amazonaws.com" }
-      Action    = "sts:AssumeRole"
-    }]
-  })
-  tags = var.tags
-}
-
-resource "aws_iam_role_policy_attachment" "governance_lambda_basic" {
-  role       = aws_iam_role.governance_lambda.name
-  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
-}
-
-resource "aws_iam_role_policy" "governance_lambda_ddb" {
-  name = "${var.name_prefix}-governance-ddb"
-  role = aws_iam_role.governance_lambda.id
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [{
-      Effect   = "Allow"
-      Action   = ["dynamodb:PutItem", "dynamodb:UpdateItem", "dynamodb:GetItem"]
-      Resource = aws_dynamodb_table.governance.arn
-    }]
-  })
-}
-
 resource "aws_cloudwatch_log_group" "capture_approval" {
   name              = "/aws/lambda/${var.name_prefix}-capture-approval"
   retention_in_days = 30
@@ -82,7 +48,7 @@ resource "aws_cloudwatch_log_group" "capture_approval" {
 
 resource "aws_lambda_function" "capture_approval" {
   function_name = "${var.name_prefix}-capture-approval"
-  role          = aws_iam_role.governance_lambda.arn
+  role          = var.governance_lambda_role_arn
   handler       = "handler.lambda_handler"
   runtime       = "python3.11"
   timeout       = 30
@@ -100,35 +66,6 @@ resource "aws_lambda_function" "capture_approval" {
 
   depends_on = [aws_cloudwatch_log_group.capture_approval]
   tags       = var.tags
-}
-
-resource "aws_iam_role_policy" "governance_lambda_extras" {
-  name = "${var.name_prefix}-governance-extras"
-  role = aws_iam_role.governance_lambda.id
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = concat(
-      [
-        {
-          Effect   = "Allow"
-          Action   = ["ssm:PutParameter"]
-          Resource = "arn:aws:ssm:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:parameter/${var.name_prefix}/deploy/*"
-        },
-        {
-          Effect   = "Allow"
-          Action   = ["events:PutEvents"]
-          Resource = "arn:aws:events:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:event-bus/default"
-        }
-      ],
-      var.kms_key_arn != null ? [
-        {
-          Effect   = "Allow"
-          Action   = ["kms:Decrypt", "kms:DescribeKey", "kms:GenerateDataKey"]
-          Resource = [var.kms_key_arn]
-        }
-      ] : []
-    )
-  })
 }
 
 resource "aws_cloudwatch_event_target" "lambda" {
@@ -174,51 +111,6 @@ resource "aws_cloudwatch_event_rule" "model_approved_deploy" {
   tags = var.tags
 }
 
-resource "aws_iam_role" "github_dispatch_lambda" {
-  count = var.enable_auto_deploy ? 1 : 0
-  name  = "${var.name_prefix}-github-dispatch"
-  assume_role_policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [{
-      Effect    = "Allow"
-      Principal = { Service = "lambda.amazonaws.com" }
-      Action    = "sts:AssumeRole"
-    }]
-  })
-  tags = var.tags
-}
-
-resource "aws_iam_role_policy_attachment" "github_dispatch_basic" {
-  count      = var.enable_auto_deploy ? 1 : 0
-  role       = aws_iam_role.github_dispatch_lambda[0].name
-  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
-}
-
-resource "aws_iam_role_policy" "github_dispatch_secrets" {
-  count = var.enable_auto_deploy ? 1 : 0
-  name  = "${var.name_prefix}-github-dispatch-secrets"
-  role  = aws_iam_role.github_dispatch_lambda[0].id
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = concat(
-      [
-        {
-          Effect   = "Allow"
-          Action   = ["secretsmanager:GetSecretValue"]
-          Resource = [var.github_token_secret_arn]
-        }
-      ],
-      var.kms_key_arn != null ? [
-        {
-          Effect   = "Allow"
-          Action   = ["kms:Decrypt", "kms:DescribeKey"]
-          Resource = [var.kms_key_arn]
-        }
-      ] : []
-    )
-  })
-}
-
 resource "aws_cloudwatch_log_group" "github_dispatch" {
   count             = var.enable_auto_deploy ? 1 : 0
   name              = "/aws/lambda/${var.name_prefix}-github-dispatch"
@@ -229,7 +121,7 @@ resource "aws_cloudwatch_log_group" "github_dispatch" {
 resource "aws_lambda_function" "github_dispatch" {
   count         = var.enable_auto_deploy ? 1 : 0
   function_name = "${var.name_prefix}-github-dispatch"
-  role          = aws_iam_role.github_dispatch_lambda[0].arn
+  role          = var.github_dispatch_lambda_role_arn
   handler       = "handler.lambda_handler"
   runtime       = "python3.11"
   timeout       = 30

@@ -16,6 +16,12 @@ variable "subnet_ids" {
   type = list(string)
 }
 
+variable "enable_vpc_endpoints" {
+  type        = bool
+  default     = true
+  description = "Create S3/SageMaker/ECR/Logs/STS/CloudWatch VPC endpoints for private ML traffic."
+}
+
 variable "model_package_arn" {
   type        = string
   description = "Approved model package ARN from Workflow B trigger."
@@ -27,7 +33,20 @@ variable "endpoint_name" {
 }
 
 variable "inference_role_arn" {
-  type = string
+  type        = string
+  description = "Client-managed SageMaker inference role ARN."
+}
+
+variable "invoke_lambda_role_arn" {
+  type        = string
+  default     = ""
+  description = "Client-managed invoke Lambda role ARN (required when enable_api_gateway)."
+}
+
+variable "apigateway_cloudwatch_role_arn" {
+  type        = string
+  default     = ""
+  description = "Client-managed API Gateway CloudWatch role ARN (required when enable_api_gateway)."
 }
 
 variable "instance_type" {

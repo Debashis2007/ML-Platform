@@ -10,6 +10,13 @@ artifacts_bucket_name     = "ml-platform-model-artifacts-ACCOUNT_ID"
 ecr_repository_name       = "ml-platform-models"
 model_package_group_name  = "ModelCreditRisk"
 spoke_account_ids         = ["111111111111", "222222222222"]
+athena_spill_bucket_name  = "ml-platform-athena-spill-ACCOUNT_ID"
 
-# github_oidc_provider_arn = "arn:aws:iam::ACCOUNT_ID:oidc-provider/token.actions.githubusercontent.com"
-# github_repo_subjects     = ["repo:Debashis2007/ML-Platform:ref:refs/heads/main"]
+# Client-managed IAM role ARNs (see docs/CLIENT_MANAGED_IAM_ROLES.md)
+pipeline_role_arn            = "arn:aws:iam::ACCOUNT_ID:role/mlp-sagemaker-pipeline"
+training_role_arn            = "arn:aws:iam::ACCOUNT_ID:role/mlp-sagemaker-training"
+inference_role_arn           = "arn:aws:iam::ACCOUNT_ID:role/mlp-sagemaker-inference"
+governance_lambda_role_arn   = "arn:aws:iam::ACCOUNT_ID:role/mlp-governance-lambda"
+stage_export_lambda_role_arn = "arn:aws:iam::ACCOUNT_ID:role/mlp-governance-export"
+step_functions_role_arn      = "arn:aws:iam::ACCOUNT_ID:role/mlp-pipeline-trigger"
+# github_dispatch_lambda_role_arn = "arn:aws:iam::ACCOUNT_ID:role/mlp-github-dispatch"

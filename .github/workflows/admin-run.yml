@@ -62,7 +62,14 @@ jobs:
       - uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd # v3.1.2
         with:
           terraform_version: 1.9.0
-      - run: terraform init
+      - name: Configure remote state backend
+        env:
+          MLP_TF_STATE_BUCKET: ${{ vars.MLP_TF_STATE_BUCKET }}
+          MLP_TF_STATE_LOCK_TABLE: ${{ vars.MLP_TF_STATE_LOCK_TABLE }}
+          MLP_TF_STATE_KEY: ml-platform/${{ inputs.plane == 'prod' && 'hub-prod' || 'hub-nonprod' }}.tfstate
+          AWS_REGION: ${{ vars.AWS_REGION }}
+        run: bash ${{ github.workspace }}/scripts/terraform_remote_backend.sh
+      - run: terraform init -input=false
       - name: Terraform plan
         run: terraform plan -out=tfplan
       - name: Terraform apply
@@ -124,13 +131,22 @@ jobs:
             ARN=$(aws ssm get-parameter --name "$SSM_PARAM" --query Parameter.Value --output text)
             echo "arn=$ARN" >> "$GITHUB_OUTPUT"
           fi
-      - run: terraform init
+      - name: Configure remote state backend
+        env:
+          MLP_TF_STATE_BUCKET: ${{ vars.MLP_TF_STATE_BUCKET }}
+          MLP_TF_STATE_LOCK_TABLE: ${{ vars.MLP_TF_STATE_LOCK_TABLE }}
+          MLP_TF_STATE_KEY: ml-platform/deploy-endpoint-${{ inputs.business_unit || 'default' }}-${{ inputs.plane }}.tfstate
+          AWS_REGION: ${{ vars.AWS_REGION }}
+        run: bash ${{ github.workspace }}/scripts/terraform_remote_backend.sh
+      - run: terraform init -input=false
       - name: Terraform apply BU endpoint
         env:
           TF_VAR_model_package_arn: ${{ steps.model.outputs.arn }}
           TF_VAR_vpc_id: ${{ vars.MLP_VPC_ID }}
           TF_VAR_subnet_ids: ${{ vars.MLP_SUBNET_IDS }}
           TF_VAR_inference_role_arn: ${{ vars.MLP_INFERENCE_ROLE_ARN }}
+          TF_VAR_invoke_lambda_role_arn: ${{ vars.MLP_INVOKE_LAMBDA_ROLE_ARN }}
+          TF_VAR_apigateway_cloudwatch_role_arn: ${{ vars.MLP_APIGW_CLOUDWATCH_ROLE_ARN }}
           TF_VAR_endpoint_name: ${{ vars.MLP_ENDPOINT_NAME || 'credit-risk' }}
           TF_VAR_business_unit: ${{ inputs.business_unit }}
           TF_VAR_enable_api_gateway: ${{ inputs.plane == 'prod' }}

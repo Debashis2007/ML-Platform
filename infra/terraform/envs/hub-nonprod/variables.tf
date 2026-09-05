@@ -18,6 +18,12 @@ variable "subnet_ids" {
   description = "Private subnets for SageMaker."
 }
 
+variable "enable_vpc_endpoints" {
+  type        = bool
+  default     = true
+  description = "Create S3/SageMaker/ECR/Logs/STS/CloudWatch VPC endpoints for private ML traffic."
+}
+
 variable "data_bucket_name" {
   type        = string
   description = "Globally unique S3 bucket name for training data."
@@ -44,14 +50,43 @@ variable "spoke_account_ids" {
   description = "Dev/test spoke account IDs for RAM model package sharing."
 }
 
-variable "github_oidc_provider_arn" {
-  type    = string
-  default = null
+# --- Client-managed IAM role ARNs (roles are NOT created by Terraform) ---
+
+variable "pipeline_role_arn" {
+  type        = string
+  description = "SageMaker pipeline execution role ARN (client-managed)."
 }
 
-variable "github_repo_subjects" {
-  type    = list(string)
-  default = []
+variable "training_role_arn" {
+  type        = string
+  description = "SageMaker training/processing role ARN (client-managed)."
+}
+
+variable "inference_role_arn" {
+  type        = string
+  default     = ""
+  description = "SageMaker inference role ARN (required when endpoints are enabled)."
+}
+
+variable "governance_lambda_role_arn" {
+  type        = string
+  description = "Lambda role for capture_approval (client-managed)."
+}
+
+variable "github_dispatch_lambda_role_arn" {
+  type        = string
+  default     = ""
+  description = "Lambda role for github_dispatch (required when enable_auto_deploy)."
+}
+
+variable "stage_export_lambda_role_arn" {
+  type        = string
+  description = "Lambda role for Stage Governance S3 export (client-managed)."
+}
+
+variable "step_functions_role_arn" {
+  type        = string
+  description = "Step Functions role for pipeline trigger (client-managed)."
 }
 
 variable "dev_artifacts_bucket_name" {

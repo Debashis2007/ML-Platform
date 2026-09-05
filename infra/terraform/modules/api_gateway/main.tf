@@ -1,34 +1,3 @@
-resource "aws_iam_role" "lambda" {
-  name = "${var.name_prefix}-invoke-endpoint"
-  assume_role_policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [{
-      Effect    = "Allow"
-      Principal = { Service = "lambda.amazonaws.com" }
-      Action    = "sts:AssumeRole"
-    }]
-  })
-  tags = var.tags
-}
-
-resource "aws_iam_role_policy_attachment" "lambda_basic" {
-  role       = aws_iam_role.lambda.name
-  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
-}
-
-resource "aws_iam_role_policy" "lambda_invoke" {
-  name = "${var.name_prefix}-invoke-endpoint"
-  role = aws_iam_role.lambda.id
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [{
-      Effect   = "Allow"
-      Action   = ["sagemaker:InvokeEndpoint"]
-      Resource = var.endpoint_arn != "" ? [var.endpoint_arn] : ["*"]
-    }]
-  })
-}
-
 resource "aws_cloudwatch_log_group" "invoke" {
   name              = "/aws/lambda/${var.name_prefix}-invoke-endpoint"
   retention_in_days = 30
@@ -36,13 +5,13 @@ resource "aws_cloudwatch_log_group" "invoke" {
 }
 
 resource "aws_lambda_function" "invoke" {
-  function_name = "${var.name_prefix}-invoke-endpoint"
-  role          = aws_iam_role.lambda.arn
-  handler       = "handler.handler"
-  runtime       = "python3.11"
-  timeout       = 30
-  memory_size   = 256
-  filename      = var.lambda_zip_path
+  function_name    = "${var.name_prefix}-invoke-endpoint"
+  role             = var.lambda_role_arn
+  handler          = "handler.handler"
+  runtime          = "python3.11"
+  timeout          = 30
+  memory_size      = 256
+  filename         = var.lambda_zip_path
   source_code_hash = var.lambda_source_hash
 
   environment {
@@ -56,25 +25,34 @@ resource "aws_lambda_function" "invoke" {
   tags       = var.tags
 }
 
-resource "aws_apigatewayv2_api" "http" {
-  name          = "${var.name_prefix}-${var.endpoint_name}-api"
-  protocol_type = "HTTP"
-  tags          = var.tags
+# REST API (WAFv2-compatible). IAM role for Lambda is client-managed (lambda_role_arn).
+resource "aws_api_gateway_rest_api" "rest" {
+  name        = "${var.name_prefix}-${var.endpoint_name}-api"
+  description = "Central Plane invoke API for ${var.endpoint_name}"
+  endpoint_configuration { types = ["REGIONAL"] }
+  tags = var.tags
 }
 
-resource "aws_apigatewayv2_integration" "lambda" {
-  api_id                 = aws_apigatewayv2_api.http.id
-  integration_type       = "AWS_PROXY"
-  integration_uri        = aws_lambda_function.invoke.invoke_arn
-  integration_method     = "POST"
-  payload_format_version = "2.0"
+resource "aws_api_gateway_resource" "invocations" {
+  rest_api_id = aws_api_gateway_rest_api.rest.id
+  parent_id   = aws_api_gateway_rest_api.rest.root_resource_id
+  path_part   = "invocations"
 }
 
-resource "aws_apigatewayv2_route" "invocations" {
-  api_id             = aws_apigatewayv2_api.http.id
-  route_key          = "POST /invocations"
-  target             = "integrations/${aws_apigatewayv2_integration.lambda.id}"
-  authorization_type = var.enable_iam_auth ? "AWS_IAM" : "NONE"
+resource "aws_api_gateway_method" "invocations_post" {
+  rest_api_id   = aws_api_gateway_rest_api.rest.id
+  resource_id   = aws_api_gateway_resource.invocations.id
+  http_method   = "POST"
+  authorization = var.enable_iam_auth ? "AWS_IAM" : "NONE"
+}
+
+resource "aws_api_gateway_integration" "lambda" {
+  rest_api_id             = aws_api_gateway_rest_api.rest.id
+  resource_id             = aws_api_gateway_resource.invocations.id
+  http_method             = aws_api_gateway_method.invocations_post.http_method
+  integration_http_method = "POST"
+  type                    = "AWS_PROXY"
+  uri                     = aws_lambda_function.invoke.invoke_arn
 }
 
 resource "aws_cloudwatch_log_group" "api" {
@@ -84,11 +62,28 @@ resource "aws_cloudwatch_log_group" "api" {
   tags              = var.tags
 }
 
-resource "aws_apigatewayv2_stage" "default" {
-  api_id      = aws_apigatewayv2_api.http.id
-  name        = "$default"
-  auto_deploy = true
-  tags        = var.tags
+resource "aws_api_gateway_deployment" "this" {
+  rest_api_id = aws_api_gateway_rest_api.rest.id
+
+  triggers = {
+    redeploy = sha1(jsonencode([
+      aws_api_gateway_resource.invocations.id,
+      aws_api_gateway_method.invocations_post.id,
+      aws_api_gateway_integration.lambda.id,
+      var.enable_iam_auth,
+    ]))
+  }
+
+  lifecycle { create_before_destroy = true }
+
+  depends_on = [aws_api_gateway_integration.lambda]
+}
+
+resource "aws_api_gateway_stage" "prod" {
+  deployment_id = aws_api_gateway_deployment.this.id
+  rest_api_id   = aws_api_gateway_rest_api.rest.id
+  stage_name    = "prod"
+  tags          = var.tags
 
   dynamic "access_log_settings" {
     for_each = var.enable_access_logs ? [1] : []
@@ -99,13 +94,29 @@ resource "aws_apigatewayv2_stage" "default" {
         ip             = "$context.identity.sourceIp"
         requestTime    = "$context.requestTime"
         httpMethod     = "$context.httpMethod"
-        routeKey       = "$context.routeKey"
+        resourcePath   = "$context.resourcePath"
         status         = "$context.status"
         protocol       = "$context.protocol"
         responseLength = "$context.responseLength"
         errorMessage   = "$context.error.message"
       })
     }
+  }
+
+  xray_tracing_enabled = true
+}
+
+resource "aws_api_gateway_method_settings" "all" {
+  rest_api_id = aws_api_gateway_rest_api.rest.id
+  stage_name  = aws_api_gateway_stage.prod.stage_name
+  method_path = "*/*"
+
+  settings {
+    metrics_enabled        = true
+    logging_level          = var.enable_access_logs ? "INFO" : "OFF"
+    data_trace_enabled     = false
+    throttling_burst_limit = var.throttling_burst_limit
+    throttling_rate_limit  = var.throttling_rate_limit
   }
 }
 
@@ -114,7 +125,7 @@ resource "aws_lambda_permission" "apigw" {
   action        = "lambda:InvokeFunction"
   function_name = aws_lambda_function.invoke.function_name
   principal     = "apigateway.amazonaws.com"
-  source_arn    = "${aws_apigatewayv2_api.http.execution_arn}/*/*"
+  source_arn    = "${aws_api_gateway_rest_api.rest.execution_arn}/*/POST/invocations"
 }
 
 resource "aws_cloudwatch_metric_alarm" "invoke_errors" {

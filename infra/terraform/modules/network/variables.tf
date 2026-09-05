@@ -13,6 +13,12 @@ variable "subnet_ids" {
   description = "Private subnet IDs for SageMaker processing/training/inference."
 }
 
+variable "enable_vpc_endpoints" {
+  type        = bool
+  default     = true
+  description = "Create Gateway (S3) and Interface (SageMaker/ECR/Logs/STS/CW) VPC endpoints."
+}
+
 variable "tags" {
   type        = map(string)
   default     = {}

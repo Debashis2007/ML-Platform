@@ -81,14 +81,14 @@ Workflow B reads the approved `model_package_arn` from workflow input or the SSM
 
 Each new model repo copies `templates/model-project/`, adds a `pipeline.yaml`, and reuses the same infra factory. Only Pass 2 (`deploy-endpoint`) is repeated per approved model version.
 
-See `docs/ARCHITECTURE_MAP.md` and `docs/CONTROL_PLANE.md` for PPT zone-to-path mapping and `infra/terraform/README.md` for module-level apply order.
+See `docs/ARCHITECTURE_MAP.md`, `docs/CONTROL_PLANE.md`, and `docs/OPERATIONS_AND_DEPLOYMENT.md` (env→env deploy, runners, pipelines, first model, maintenance) for PPT zone-to-path mapping and `infra/terraform/README.md` for module-level apply order.
 
 ## Repository layout
 
 | Path | Purpose |
 |------|---------|
 | `infra/terraform/` | **Terraform** — Central Plane Non-Prod/Prod factories |
-| `docs/` | Architecture map + Central Plane alignment |
+| `docs/` | Architecture, accounts, [operations](docs/OPERATIONS_AND_DEPLOYMENT.md), [client IAM roles](docs/CLIENT_MANAGED_IAM_ROLES.md) |
 | `deployment/` | CloudFormation templates — hub/spoke, KMS, governance |
 | `ml_platform/` | Pipeline builder + evaluation step modules |
 | `examples/credit-risk/` | Lighthouse model |

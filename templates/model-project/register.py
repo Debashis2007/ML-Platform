@@ -34,6 +34,16 @@ def main() -> None:
         "--approval-status",
         default=os.environ.get("MODEL_APPROVAL_STATUS", "PendingManualApproval"),
     )
+    parser.add_argument(
+        "--life-cycle-stage",
+        default=os.environ.get("MODEL_LIFE_CYCLE_STAGE", "Development"),
+        help="Model Registry staging construct stage (e.g. Development, PreProduction, Production).",
+    )
+    parser.add_argument(
+        "--life-cycle-status",
+        default=os.environ.get("MODEL_LIFE_CYCLE_STATUS", "PendingApproval"),
+        help="Model Registry staging construct status (e.g. PendingApproval, Approved).",
+    )
     parser.add_argument("--region", default=os.environ.get("AWS_REGION") or os.environ.get("AWS_DEFAULT_REGION"))
     args, _unknown = parser.parse_known_args()
 
@@ -58,6 +68,11 @@ def main() -> None:
         "ModelPackageGroupName": args.model_package_group,
         "ModelPackageDescription": f"{args.model_name} registered by ML Platform pipeline",
         "ModelApprovalStatus": args.approval_status,
+        "ModelLifeCycle": {
+            "Stage": args.life_cycle_stage,
+            "StageStatus": args.life_cycle_status,
+            "StageDescription": f"{args.model_name} pipeline registration",
+        },
         "InferenceSpecification": {
             "Containers": [
                 {

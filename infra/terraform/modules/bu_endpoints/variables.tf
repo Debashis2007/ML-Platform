@@ -4,12 +4,12 @@ variable "name_prefix" {
 
 variable "business_units" {
   type = map(object({
-    endpoint_name         = string
-    model_package_arn     = string
-    instance_type         = optional(string, "ml.m5.large")
-    instance_count        = optional(number, 1)
-    enable_data_capture   = optional(bool, true)
-    enable_multi_az       = optional(bool, false)
+    endpoint_name       = string
+    model_package_arn   = string
+    instance_type       = optional(string, "ml.m5.large")
+    instance_count      = optional(number, 1)
+    enable_data_capture = optional(bool, true)
+    enable_multi_az     = optional(bool, false)
   }))
   description = "Map of BU code (BU1, BU2, BU3, BU4) to endpoint settings. Empty model_package_arn skips that BU."
 }
@@ -35,6 +35,22 @@ variable "kms_key_arn" {
   default = null
 }
 
+variable "lambda_zip_path" {
+  type    = string
+  default = ""
+}
+
+variable "lambda_source_hash" {
+  type    = string
+  default = ""
+}
+
+variable "invoke_lambda_role_arn" {
+  type        = string
+  default     = ""
+  description = "Client-managed invoke Lambda role ARN (required when enable_api_gateway)."
+}
+
 variable "enable_api_gateway" {
   type        = bool
   description = "false = Non-Prod DEV (direct SageMaker). true = Prod (API Gateway front door)."
@@ -49,16 +65,6 @@ variable "enable_waf" {
 variable "enable_iam_auth" {
   type    = bool
   default = true
-}
-
-variable "lambda_zip_path" {
-  type    = string
-  default = ""
-}
-
-variable "lambda_source_hash" {
-  type    = string
-  default = ""
 }
 
 variable "tags" {

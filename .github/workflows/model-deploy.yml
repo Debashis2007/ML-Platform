@@ -45,14 +45,23 @@ jobs:
       - uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd # v3.1.2
         with:
           terraform_version: 1.9.0
+      - name: Configure remote state backend
+        env:
+          MLP_TF_STATE_BUCKET: ${{ vars.MLP_TF_STATE_BUCKET }}
+          MLP_TF_STATE_LOCK_TABLE: ${{ vars.MLP_TF_STATE_LOCK_TABLE }}
+          MLP_TF_STATE_KEY: ml-platform/deploy-endpoint.tfstate
+          AWS_REGION: ${{ vars.AWS_REGION }}
+        run: bash ${{ github.workspace }}/scripts/terraform_remote_backend.sh
       - name: Terraform init
-        run: terraform init
+        run: terraform init -input=false
       - name: Terraform plan
         env:
           TF_VAR_model_package_arn: ${{ steps.model.outputs.arn }}
           TF_VAR_vpc_id: ${{ vars.MLP_VPC_ID }}
           TF_VAR_subnet_ids: ${{ vars.MLP_SUBNET_IDS }}
           TF_VAR_inference_role_arn: ${{ vars.MLP_INFERENCE_ROLE_ARN }}
+          TF_VAR_invoke_lambda_role_arn: ${{ vars.MLP_INVOKE_LAMBDA_ROLE_ARN }}
+          TF_VAR_apigateway_cloudwatch_role_arn: ${{ vars.MLP_APIGW_CLOUDWATCH_ROLE_ARN }}
           TF_VAR_endpoint_name: ${{ vars.MLP_ENDPOINT_NAME || 'credit-risk' }}
           TF_VAR_kms_key_arn: ${{ vars.MLP_KMS_KEY_ARN }}
           TF_VAR_artifacts_bucket_name: ${{ vars.MLP_ARTIFACTS_BUCKET }}

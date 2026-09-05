@@ -16,6 +16,12 @@ variable "subnet_ids" {
   type = list(string)
 }
 
+variable "enable_vpc_endpoints" {
+  type        = bool
+  default     = true
+  description = "Create S3/SageMaker/ECR/Logs/STS/CloudWatch VPC endpoints for private ML traffic."
+}
+
 variable "data_bucket_name" {
   type = string
 }
@@ -42,20 +48,63 @@ variable "model_package_group_name" {
   default = "ModelCreditRisk"
 }
 
-variable "create_iam_roles" {
-  type        = bool
-  default     = false
-  description = "Create IAM roles in this account. When false, pass pipeline_role_arn/training_role_arn."
-}
+# --- Client-managed IAM role ARNs (roles are NOT created by Terraform) ---
 
 variable "pipeline_role_arn" {
-  type    = string
-  default = ""
+  type        = string
+  description = "SageMaker pipeline execution role ARN (client-managed)."
 }
 
 variable "training_role_arn" {
-  type    = string
-  default = ""
+  type        = string
+  description = "SageMaker training/processing role ARN (client-managed)."
+}
+
+variable "inference_role_arn" {
+  type        = string
+  default     = ""
+  description = "SageMaker inference role ARN (required when BU endpoints enabled)."
+}
+
+variable "governance_lambda_role_arn" {
+  type        = string
+  default     = ""
+  description = "Required when enable_governance=true."
+}
+
+variable "github_dispatch_lambda_role_arn" {
+  type        = string
+  default     = ""
+  description = "Required when enable_auto_deploy=true."
+}
+
+variable "stage_export_lambda_role_arn" {
+  type        = string
+  default     = ""
+  description = "Required when enable_governance=true (Stage Analytics export)."
+}
+
+variable "step_functions_role_arn" {
+  type        = string
+  description = "Step Functions role for pipeline trigger (client-managed)."
+}
+
+variable "promote_lambda_role_arn" {
+  type        = string
+  default     = ""
+  description = "Required when enable_promote=true."
+}
+
+variable "invoke_lambda_role_arn" {
+  type        = string
+  default     = ""
+  description = "Required when enable_bu_endpoints=true (API invoke Lambda)."
+}
+
+variable "apigateway_cloudwatch_role_arn" {
+  type        = string
+  default     = ""
+  description = "Required when enable_bu_endpoints=true (API Gateway account CloudWatch role)."
 }
 
 variable "create_registry" {
@@ -109,12 +158,6 @@ variable "business_units" {
   }
 }
 
-variable "inference_role_arn" {
-  type        = string
-  default     = ""
-  description = "Required when create_iam_roles=false and enable_bu_endpoints=true."
-}
-
 variable "athena_spill_bucket_name" {
   type        = string
   default     = ""
@@ -148,16 +191,6 @@ variable "github_dispatch_token" {
 }
 
 variable "spoke_account_ids" {
-  type    = list(string)
-  default = []
-}
-
-variable "github_oidc_provider_arn" {
-  type    = string
-  default = null
-}
-
-variable "github_repo_subjects" {
   type    = list(string)
   default = []
 }

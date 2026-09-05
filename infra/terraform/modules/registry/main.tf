@@ -4,6 +4,10 @@ resource "aws_sagemaker_model_package_group" "this" {
   tags                            = var.tags
 }
 
+# Staging construct is applied on Create/UpdateModelPackage (ModelLifeCycle), not on the
+# package group resource in Terraform. IAM stage gates live in modules/iam (gha_deploy).
+# Recommended stages: Development → PreProduction → Production (see outputs).
+
 resource "aws_ram_resource_share" "model_package" {
   count                     = length(var.spoke_account_ids) > 0 ? 1 : 0
   name                      = "${var.model_package_group_name}-share"

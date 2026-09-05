@@ -46,6 +46,17 @@ variable "github_token_secret_arn" {
   description = "Secrets Manager ARN holding the GitHub dispatch token."
 }
 
+variable "governance_lambda_role_arn" {
+  type        = string
+  description = "Client-managed IAM role ARN for capture_approval Lambda."
+}
+
+variable "github_dispatch_lambda_role_arn" {
+  type        = string
+  default     = ""
+  description = "Client-managed IAM role ARN for github_dispatch Lambda (required when enable_auto_deploy)."
+}
+
 variable "tags" {
   type    = map(string)
   default = {}

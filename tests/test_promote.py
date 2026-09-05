@@ -54,6 +54,9 @@ def test_promote_success(env):
     assert body["business_unit"] == "BU1"
     assert ssm.put_parameter.call_count >= 2
     events.put_events.assert_called_once()
+    create_kwargs = sm.create_model_package.call_args.kwargs
+    assert create_kwargs["ModelLifeCycle"]["Stage"] == "Production"
+    assert create_kwargs["ModelLifeCycle"]["StageStatus"] == "Approved"
 
 
 def test_promote_requires_source(env):

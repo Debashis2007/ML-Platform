@@ -16,6 +16,11 @@ variable "kms_key_arn" {
   default = null
 }
 
+variable "export_lambda_role_arn" {
+  type        = string
+  description = "Client-managed IAM role ARN for governance export Lambda."
+}
+
 variable "spill_bucket_name" {
   type        = string
   description = "Globally unique S3 bucket for Athena spill + governance exports."

@@ -45,8 +45,16 @@ jobs:
       - uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd # v3.1.2
         with:
           terraform_version: 1.9.0
+      - name: Configure remote state backend
+        env:
+          MLP_TF_STATE_BUCKET: ${{ vars.MLP_TF_STATE_BUCKET }}
+          MLP_TF_STATE_LOCK_TABLE: ${{ vars.MLP_TF_STATE_LOCK_TABLE }}
+          MLP_TF_STATE_KEY: ml-platform/${{ inputs.environment }}.tfstate
+          AWS_REGION: ${{ vars.AWS_REGION }}
+          TF_ENV_NAME: ${{ inputs.environment }}
+        run: bash ${{ github.workspace }}/scripts/terraform_remote_backend.sh
       - name: Terraform init
-        run: terraform init
+        run: terraform init -input=false
       - name: Terraform plan
         if: inputs.action == 'plan' || inputs.action == 'apply'
         run: terraform plan -out=tfplan

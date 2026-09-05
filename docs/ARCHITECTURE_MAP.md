@@ -2,7 +2,7 @@
 
 How platform infrastructure and ML pipelines connect across **Central Plane** accounts.
 
-See also: [`CONTROL_PLANE.md`](./CONTROL_PLANE.md) (PPT alignment).
+See also: [`CONTROL_PLANE.md`](./CONTROL_PLANE.md) (PPT alignment) · [`OPERATIONS_AND_DEPLOYMENT.md`](./OPERATIONS_AND_DEPLOYMENT.md) (env→env, runners, first model, maintenance).
 
 ## Two layers
 

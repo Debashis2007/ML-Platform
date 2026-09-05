@@ -27,19 +27,13 @@ output "ecr_repository_url" {
 }
 
 output "pipeline_role_arn" {
-  value = local.pipeline_role_arn
+  value       = var.pipeline_role_arn
+  description = "Client-managed (passed through)."
 }
 
 output "training_role_arn" {
-  value = local.training_role_arn
-}
-
-output "gha_pipeline_role_arn" {
-  value = try(module.iam[0].gha_pipeline_role_arn, null)
-}
-
-output "gha_deploy_role_arn" {
-  value = try(module.iam[0].gha_deploy_role_arn, null)
+  value       = var.training_role_arn
+  description = "Client-managed (passed through)."
 }
 
 output "github_dispatch_lambda_arn" {

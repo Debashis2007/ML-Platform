@@ -125,51 +125,6 @@ resource "aws_glue_catalog_table" "stage_governance" {
   }
 }
 
-resource "aws_iam_role" "export" {
-  name = "${var.name_prefix}-governance-export"
-  assume_role_policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [{
-      Effect    = "Allow"
-      Principal = { Service = "lambda.amazonaws.com" }
-      Action    = "sts:AssumeRole"
-    }]
-  })
-  tags = var.tags
-}
-
-resource "aws_iam_role_policy_attachment" "export_basic" {
-  role       = aws_iam_role.export.name
-  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
-}
-
-resource "aws_iam_role_policy" "export" {
-  name = "${var.name_prefix}-governance-export"
-  role = aws_iam_role.export.id
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = concat(
-      [
-        {
-          Effect   = "Allow"
-          Action   = ["dynamodb:Scan", "dynamodb:DescribeTable"]
-          Resource = [var.governance_table_arn]
-        },
-        {
-          Effect   = "Allow"
-          Action   = ["s3:PutObject", "s3:AbortMultipartUpload", "s3:ListBucket"]
-          Resource = [aws_s3_bucket.spill.arn, "${aws_s3_bucket.spill.arn}/*"]
-        }
-      ],
-      var.kms_key_arn != null ? [{
-        Effect   = "Allow"
-        Action   = ["kms:Encrypt", "kms:Decrypt", "kms:GenerateDataKey", "kms:DescribeKey"]
-        Resource = [var.kms_key_arn]
-      }] : []
-    )
-  })
-}
-
 resource "aws_cloudwatch_log_group" "export" {
   name              = "/aws/lambda/${var.name_prefix}-governance-export"
   retention_in_days = 30
@@ -183,13 +138,13 @@ data "archive_file" "export" {
 }
 
 resource "aws_lambda_function" "export" {
-  function_name = "${var.name_prefix}-governance-export"
-  role          = aws_iam_role.export.arn
-  handler       = "export_governance.handler"
-  runtime       = "python3.11"
-  timeout       = 120
-  memory_size   = 512
-  filename      = data.archive_file.export.output_path
+  function_name    = "${var.name_prefix}-governance-export"
+  role             = var.export_lambda_role_arn
+  handler          = "export_governance.handler"
+  runtime          = "python3.11"
+  timeout          = 120
+  memory_size      = 512
+  filename         = data.archive_file.export.output_path
   source_code_hash = data.archive_file.export.output_base64sha256
 
   environment {

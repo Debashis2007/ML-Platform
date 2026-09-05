@@ -25,7 +25,12 @@ variable "alarm_actions" {
 variable "enable_model_monitor" {
   type        = bool
   default     = false
-  description = "Create SageMaker Data Quality monitoring schedule."
+  description = <<-EOT
+    Create SageMaker Data Quality monitoring schedule.
+    NOTE: As of AWS docs, Model Monitor is closed to new customers; existing customers may continue.
+    Prefer data capture + custom monitoring if you are a new account.
+    See: https://docs.aws.amazon.com/sagemaker/latest/dg/model-monitor-data-capture-endpoint.html
+  EOT
 }
 
 variable "monitoring_role_arn" {
