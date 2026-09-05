@@ -91,7 +91,8 @@ See `docs/ARCHITECTURE_MAP.md`, `docs/CONTROL_PLANE.md`, and `docs/OPERATIONS_AN
 | `docs/` | Architecture, accounts, [operations](docs/OPERATIONS_AND_DEPLOYMENT.md), [client IAM roles](docs/CLIENT_MANAGED_IAM_ROLES.md) |
 | `deployment/` | CloudFormation templates — hub/spoke, KMS, governance |
 | `ml_platform/` | Pipeline builder + evaluation step modules |
-| `examples/credit-risk/` | Lighthouse model |
+| `examples/ootb_jumpstart/` | **OOTB first deploy** — JumpStart pretrained model (no train) |
+| `examples/credit-risk/` | Lighthouse full pipeline (Train→Evaluate→Register) |
 | `templates/model-project/` | GitHub template for new model repos |
 | `lambdas/` | Governance, promote, invoke, GitHub dispatch |
 | `.github/workflows/` | Admin-Run, CI, promote, deploy, platform-infra |

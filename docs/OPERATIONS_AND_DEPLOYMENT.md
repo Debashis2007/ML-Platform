@@ -176,17 +176,22 @@ Human: Approve package in Non-Prod Model Registry
 
 ## 5. What to run first (bootstrap order)
 
-### First model
+### First model options
 
-**Run credit-risk first.** It is the reference implementation:
+| Goal | What to run |
+|------|-------------|
+| **Fast first endpoint (recommended now)** | OOTB JumpStart XGBoost — `examples/ootb_jumpstart/` + workflow `ootb-register.yml` → approve → deploy |
+| **Full Train→Evaluate→Register** | Lighthouse **credit-risk** — `examples/credit-risk/` + `model-ci.yml` |
 
-- Config: `examples/credit-risk/pipeline.yaml`
-- Scripts: `preprocess.py`, `train.py`, `evaluate.py`, `register.py`, `inference.py`
-- CI already points at it (`MODEL_NAME: credit-risk`)
+**OOTB path (no custom training):**
 
-Do not onboard BU1/BU2/BU3/BU4 serving until credit-risk has trained, registered, been approved, promoted, and deployed once end-to-end.
+1. Actions → **OOTB JumpStart — register** (default model id `xgboost-classification-model`, group `ModelOotbDemo`).
+2. Approve package if status is `PendingManualApproval`.
+3. **admin-run → deploy-bu** or **model-deploy** with the printed `model_package_arn` and endpoint name e.g. `ootb-xgboost`.
 
-### Step-by-step first cutover
+**credit-risk path (full MLOps):** keep using `model-ci.yml` after OOTB proves serving/governance plumbing.
+
+### Step-by-step first cutover (infra + OOTB serve)
 
 1. **Prereqs in AWS**  
    VPC + private subnets, S3 state bucket (+ DynamoDB lock table), OIDC provider for GitHub, **all IAM roles created by the client** (see [`CLIENT_MANAGED_IAM_ROLES.md`](./CLIENT_MANAGED_IAM_ROLES.md)).
@@ -204,8 +209,9 @@ Do not onboard BU1/BU2/BU3/BU4 serving until credit-risk has trained, registered
 5. **Wire CI**  
    Copy Terraform outputs into GitHub vars (pipeline role, data URI, ECR name, promote Lambda name, SSM paths).
 
-6. **First train**  
-   Merge a change under `examples/credit-risk/` or `ml_platform/` to `main` → `model-ci.yml` runs → wait for SageMaker Pipeline success → package in **PendingManualApproval**.
+6. **First model (pick one)**  
+   - **OOTB (recommended first):** run `ootb-register.yml` → approve → deploy-bu / model-deploy.  
+   - **credit-risk:** merge a change under `examples/credit-risk/` → `model-ci.yml` → wait for pipeline → approve.
 
 7. **Approve**  
    SageMaker console (or API): set package to **Approved**.
@@ -279,6 +285,7 @@ No need to re-apply full hub Terraform for every model—only Pass 2 style endpo
 
 | Goal | Action |
 |------|--------|
+| Register OOTB JumpStart model | Actions → `OOTB JumpStart — register` |
 | Create / update shared Non-Prod AWS | `admin-run` or `platform-infra` → `hub-nonprod` → apply |
 | Create / update shared Prod AWS | same → `hub-prod` → apply |
 | Retrain credit-risk | Push to `main` touching model paths → `model-ci` |
