@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from sagemaker.processing import ProcessingInput, ProcessingOutput, ScriptProcessor
+from sagemaker.workflow.functions import Join
 from sagemaker.workflow.parameters import ParameterString
 from sagemaker.workflow.steps import ProcessingStep
 
@@ -25,6 +26,7 @@ def build_preprocess_step(
         instance_type=instance_type,
         instance_count=1,
         role=role_arn,
+        env={"TARGET_COLUMN": cfg.target_column, "MODEL_NAME": cfg.model_name},
     )
     return ProcessingStep(
         name="Preprocess",
@@ -32,10 +34,16 @@ def build_preprocess_step(
         inputs=[ProcessingInput(source=data_uri, destination="/opt/ml/processing/input")],
         outputs=[
             ProcessingOutput(
-                output_name="processed",
-                source="/opt/ml/processing/output",
-                destination=f"{output_prefix}/processed",
-            )
+                output_name="train",
+                source="/opt/ml/processing/output/train",
+                destination=Join(on="/", values=[output_prefix, "processed", "train"]),
+            ),
+            ProcessingOutput(
+                output_name="validation",
+                source="/opt/ml/processing/output/validation",
+                destination=Join(on="/", values=[output_prefix, "processed", "validation"]),
+            ),
         ],
         code=script_path(cfg.model_name, "preprocess.py"),
+        job_arguments=["--target-column", cfg.target_column],
     )

@@ -24,6 +24,27 @@ resource "aws_sagemaker_endpoint_configuration" "this" {
     instance_type          = var.instance_type
   }
 
+  dynamic "data_capture_config" {
+    for_each = var.enable_data_capture && var.data_capture_s3_uri != "" ? [1] : []
+    content {
+      enable_capture              = true
+      initial_sampling_percentage = var.data_capture_percentage
+      destination_s3_uri          = var.data_capture_s3_uri
+      kms_key_id                  = var.kms_key_id
+
+      capture_options {
+        capture_mode = "Input"
+      }
+      capture_options {
+        capture_mode = "Output"
+      }
+
+      capture_content_type_header {
+        json_content_types = ["application/json"]
+      }
+    }
+  }
+
   tags = var.tags
 }
 

@@ -39,6 +39,29 @@ variable "enable_multi_az" {
   default = false
 }
 
+variable "enable_data_capture" {
+  type        = bool
+  default     = true
+  description = "Enable SageMaker data capture for Model Monitor."
+}
+
+variable "data_capture_s3_uri" {
+  type        = string
+  default     = ""
+  description = "s3://bucket/prefix for captured request/response payloads."
+}
+
+variable "data_capture_percentage" {
+  type    = number
+  default = 100
+}
+
+variable "kms_key_id" {
+  type        = string
+  default     = null
+  description = "Optional KMS key id/arn for data capture."
+}
+
 variable "tags" {
   type    = map(string)
   default = {}

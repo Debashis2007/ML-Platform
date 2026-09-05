@@ -18,8 +18,23 @@ provider "aws" {
 
 data "archive_file" "capture_approval_lambda" {
   type        = "zip"
-  source_dir  = "${path.module}/../../../lambdas/capture_approval_event"
+  source_dir  = "${path.module}/../../../../lambdas/capture_approval_event"
   output_path = "${path.module}/.build/capture_approval.zip"
+}
+
+data "archive_file" "github_dispatch_lambda" {
+  count       = var.enable_auto_deploy ? 1 : 0
+  type        = "zip"
+  source_dir  = "${path.module}/../../../../lambdas/trigger_github_deploy"
+  output_path = "${path.module}/.build/github_dispatch.zip"
+}
+
+module "kms" {
+  source = "../../modules/kms"
+
+  name_prefix       = var.name_prefix
+  spoke_account_ids = var.spoke_account_ids
+  tags              = var.tags
 }
 
 module "network" {
@@ -39,14 +54,17 @@ module "storage" {
   dev_artifacts_bucket_name = var.dev_artifacts_bucket_name
   artifacts_bucket_name     = var.artifacts_bucket_name
   ecr_repository_name       = var.ecr_repository_name
+  kms_key_arn               = module.kms.key_arn
   tags                      = var.tags
 }
 
 module "secrets" {
   source = "../../modules/secrets"
 
-  name_prefix = var.name_prefix
-  tags        = var.tags
+  name_prefix           = var.name_prefix
+  kms_key_arn           = module.kms.key_arn
+  github_dispatch_token = var.github_dispatch_token
+  tags                  = var.tags
 }
 
 module "iam" {
@@ -58,6 +76,7 @@ module "iam" {
   ecr_repository_arn       = module.storage.ecr_repository_arn
   github_oidc_provider_arn = var.github_oidc_provider_arn
   github_repo_subjects     = var.github_repo_subjects
+  kms_key_arn              = module.kms.key_arn
   tags                     = var.tags
 }
 
@@ -77,7 +96,25 @@ module "governance" {
   model_package_group_name = var.model_package_group_name
   lambda_source_dir        = "${path.module}/.build"
   deploy_parameter_prefix  = "/${var.name_prefix}/deploy"
+  kms_key_arn              = module.kms.key_arn
+  enable_auto_deploy       = var.enable_auto_deploy
+  github_owner             = var.github_owner
+  github_repo              = var.github_repo
+  github_token_secret_arn  = coalesce(module.secrets.github_dispatch_secret_arn, "")
   tags                     = var.tags
+
+  depends_on = [
+    data.archive_file.capture_approval_lambda,
+    data.archive_file.github_dispatch_lambda,
+  ]
+}
+
+module "sns" {
+  source = "../../modules/sns"
+
+  name_prefix = var.name_prefix
+  kms_key_arn = module.kms.key_arn
+  tags        = var.tags
 }
 
 module "credit_risk_pipeline" {
@@ -115,17 +152,49 @@ module "cloudwatch" {
   tags           = var.tags
 }
 
+module "stage_analytics" {
+  source = "../../modules/stage_analytics"
+
+  name_prefix            = var.name_prefix
+  governance_table_name  = module.governance.governance_table_name
+  governance_table_arn   = module.governance.governance_table_arn
+  kms_key_arn            = module.kms.key_arn
+  spill_bucket_name      = var.athena_spill_bucket_name
+  quicksight_user_arn    = var.quicksight_user_arn
+  tags                   = var.tags
+}
+
+# Central Plane Non-Prod: per-BU SageMaker endpoints WITHOUT API Gateway.
+module "bu_endpoints" {
+  source = "../../modules/bu_endpoints"
+  count  = var.enable_bu_endpoints ? 1 : 0
+
+  name_prefix           = var.name_prefix
+  business_units        = var.business_units
+  inference_role_arn    = module.iam.inference_role_arn
+  subnet_ids            = module.network.subnet_ids
+  security_group_ids    = [module.network.sagemaker_security_group_id]
+  artifacts_bucket_name = module.storage.artifacts_bucket_name
+  kms_key_arn           = module.kms.key_arn
+  enable_api_gateway    = false
+  tags                  = var.tags
+}
+
+# Backward-compatible single test endpoint (prefer bu_endpoints for platform).
 module "dev_test_endpoint" {
   source = "../../modules/endpoint"
   count  = var.create_dev_test_endpoint ? 1 : 0
 
-  name_prefix        = var.name_prefix
-  model_package_arn  = var.dev_test_model_package_arn
-  endpoint_name      = "${var.name_prefix}-credit-risk-test"
-  inference_role_arn = module.iam.inference_role_arn
-  subnet_ids         = module.network.subnet_ids
-  security_group_ids = [module.network.sagemaker_security_group_id]
-  instance_type      = "ml.m5.large"
-  instance_count     = 1
-  tags               = var.tags
+  name_prefix         = var.name_prefix
+  model_package_arn   = var.dev_test_model_package_arn
+  endpoint_name       = "${var.name_prefix}-credit-risk-test"
+  inference_role_arn  = module.iam.inference_role_arn
+  subnet_ids          = module.network.subnet_ids
+  security_group_ids  = [module.network.sagemaker_security_group_id]
+  instance_type       = "ml.m5.large"
+  instance_count      = 1
+  enable_data_capture = true
+  data_capture_s3_uri = "s3://${module.storage.artifacts_bucket_name}/data-capture/${var.name_prefix}-credit-risk-test"
+  kms_key_id          = module.kms.key_arn
+  tags                = var.tags
 }

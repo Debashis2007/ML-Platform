@@ -1,14 +1,18 @@
 model: credit-risk
+model_package_group: ModelCreditRisk
 owner_bu: demo
 environment: dev
+target_column: default
 steps:
   features:
     enabled: false
   train:
     enabled: true
     instance: ml.m5.xlarge
+    framework_version: "1.2-1"
   evaluate:
     enabled: true
+    instance: ml.m5.xlarge
   conditional_register:
     enabled: true
     metric: auc

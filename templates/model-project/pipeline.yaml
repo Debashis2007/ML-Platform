@@ -1,19 +1,24 @@
-model: credit-risk
-owner_bu: demo
+model: REPLACE_MODEL_NAME
+model_package_group: REPLACE_MODEL_PACKAGE_GROUP
+owner_bu: platform
+environment: dev
+target_column: default
 steps:
   features:
     enabled: false
   train:
     enabled: true
     instance: ml.m5.xlarge
+    framework_version: "1.2-1"
   evaluate:
     enabled: true
+    instance: ml.m5.xlarge
   conditional_register:
     enabled: true
     metric: auc
     threshold: 0.75
 deployment:
   target: bu-account
-  account_id: BU-dev
+  account_id: "000000000000"
 data:
-  train_uri: s3://ml-platform-data/credit-risk/train/
+  train_uri: s3://ml-platform-data/REPLACE_MODEL_NAME/train/

@@ -56,8 +56,17 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "artifacts" {
 
 resource "aws_ecr_repository" "models" {
   name                 = var.ecr_repository_name
-  image_tag_mutability = "MUTABLE"
+  image_tag_mutability = "IMMUTABLE"
   image_scanning_configuration { scan_on_push = true }
+
+  dynamic "encryption_configuration" {
+    for_each = var.kms_key_arn != null ? [1] : []
+    content {
+      encryption_type = "KMS"
+      kms_key         = var.kms_key_arn
+    }
+  }
+
   tags = merge(var.tags, { Name = var.ecr_repository_name })
 }
 
@@ -108,4 +117,15 @@ resource "aws_s3_bucket_public_access_block" "prod_data" {
   block_public_policy       = true
   ignore_public_acls      = true
   restrict_public_buckets = true
+}
+
+resource "aws_s3_bucket_server_side_encryption_configuration" "prod_data" {
+  count  = length(aws_s3_bucket.prod_data) > 0 ? 1 : 0
+  bucket = aws_s3_bucket.prod_data[0].id
+  rule {
+    apply_server_side_encryption_by_default {
+      sse_algorithm     = var.kms_key_arn != null ? "aws:kms" : "AES256"
+      kms_master_key_id = var.kms_key_arn
+    }
+  }
 }

@@ -1,57 +1,50 @@
 # Architecture map
 
-How platform infrastructure and ML pipelines connect across environments.
+How platform infrastructure and ML pipelines connect across **Central Plane** accounts.
+
+See also: [`CONTROL_PLANE.md`](./CONTROL_PLANE.md) (PPT alignment).
 
 ## Two layers
 
 | Layer | Location | When it runs | Responsibility |
 |-------|----------|--------------|----------------|
-| **Infrastructure** | `infra/terraform/` | Once per environment (`platform-infra.yml` or manual apply) | Shared AWS services: networking, S3, ECR, IAM, registry, governance, SSM, Step Functions, monitoring |
+| **Infrastructure** | `infra/terraform/` | Once per Central Plane (`admin-run.yml` / `platform-infra.yml`) | Shared AWS: network, S3, ECR, IAM, registry, Stage Governance, Athena analytics, BU endpoints |
 | **ML pipeline** | `ml_platform/`, `pipeline.yaml` | Every model code change (`model-ci.yml`) | SageMaker Pipeline DAG: Preprocess → Train → Evaluate → Condition → Register |
 
-Infrastructure creates the landing zone. Application code defines what runs inside it.
-
-## Environment zones
+## Central Plane zones (from PPT)
 
 | Zone | AWS components | Repository paths |
 |------|----------------|------------------|
-| **GitHub** | — | `templates/model-project/`, `.github/workflows/model-ci.yml`, `model-deploy.yml`, `platform-infra.yml` |
-| **DEV** | Build pipeline, Secrets Manager, ECR, dev/model artifact buckets, Step Functions trigger, optional test endpoint, CloudWatch | `ml_platform/steps/`, `envs/hub-nonprod/`, `modules/evaluation-pipeline/`, `modules/step_functions/`, `modules/secrets/` |
-| **PROD** | Prod pipeline, deploy trigger, API Gateway, SageMaker endpoint, Model Monitor, SNS, CloudWatch | `envs/hub-prod/`, `envs/deploy-endpoint/`, `modules/api_gateway/`, `modules/monitoring/`, `modules/sns/` |
-| **Data sources** | Data Lake, external feeds | `modules/storage/`, `pipeline.yaml` data URIs |
-| **Governance** | EventBridge, Lambda, DynamoDB, SSM | `modules/governance/`, `lambdas/capture_approval_event/` |
+| **GitHub Admin-Run** | Orchestrates both planes | `.github/workflows/admin-run.yml`, `model-promote.yml`, `model-ci.yml`, `model-deploy.yml` |
+| **Non-Prod Central Plane** | Registry, S3, ECR, Stage Governance (EB→Λ→DDB→Athena), DEV BU endpoints (no API GW) | `envs/hub-nonprod/`, `modules/stage_analytics/`, `modules/bu_endpoints/` |
+| **Prod Central Plane** | PROD registry, Stage Governance, promote Lambda, BU endpoints + API GW + WAF | `envs/hub-prod/`, `modules/promote/`, `modules/api_gateway/`, `modules/waf/` |
+| **BU serving** | BU1 / BU2 / BU3 / BU4 SageMaker endpoints | `modules/bu_endpoints/`, `envs/deploy-endpoint/` |
+| **Governance audit** | DynamoDB + Athena + QuickSight/Power BI | `modules/governance/`, `modules/stage_analytics/` |
 
-## End-to-end flows
+## End-to-end flows (PPT legend)
 
-| Step | What happens | Code |
-|------|--------------|------|
-| **1–2** | Push to training repo → GitHub Actions builds image, upserts pipeline, starts execution | `model-ci.yml`, `ml_platform/build_pipeline.py`, `ml_platform/run_pipeline.py` |
-| **3–4** | Approver triggers deployment workflow after model review | `model-deploy.yml` |
-| **5–6** | Data Lake feeds DEV preprocess; promoted data feeds PROD preprocess | S3 buckets (`modules/storage/`), pipeline `DataUri` parameter |
-| **7–10** | Register → monitoring → trigger → endpoint config/endpoint pipelines → CloudWatch | `ml_platform/steps/register.py`, `modules/step_functions/`, `modules/cloudwatch/`, optional dev test endpoint |
-| **11** | Lead approves manual deployment; registry status becomes Approved | SageMaker Model Registry, `modules/governance/`, `lambdas/capture_approval_event/` |
-| **12–15** | PROD pipeline → deploy trigger → endpoint materialization → application traffic | `envs/hub-prod/`, `envs/deploy-endpoint/`, `modules/endpoint/`, `modules/api_gateway/` |
+| PPT # | What happens | Code |
+|-------|--------------|------|
+| 1/9 | Registry ↔ S3 model artifacts | `modules/registry/`, `modules/storage/` |
+| 2/10 | Artifacts ↔ ECR images | `modules/storage/` ECR, `model-ci.yml` |
+| 3–4 / 11–12 | EventBridge → Lambda → DynamoDB Stage Governance | `modules/governance/`, `lambdas/capture_approval_event/` |
+| 5–6 / 13–14 | DynamoDB → Athena → QuickSight / Power BI | `modules/stage_analytics/` |
+| 7/15 | Registry approval event | EventBridge rule in governance |
+| 8 | ECR → DEV BU SageMaker endpoints (no API GW) | `bu_endpoints` `enable_api_gateway=false` |
+| 16 | ECR → Prod API Gateway → BU endpoints | `bu_endpoints` / `deploy-endpoint` with API GW |
 
-## Infra ↔ pipeline contract
+## Promotion
 
-| Infrastructure provides | Pipeline uses |
-|---------------------------|---------------|
-| S3 data and artifacts buckets | Training data URI, model artifacts, evaluation output |
-| ECR repository | Container image for Train/Evaluate steps |
-| IAM pipeline and training roles | Pipeline upsert and step execution |
-| Model Package Group | Register step destination |
-| SSM parameters (thresholds, instance types, S3 prefixes) | Platform defaults per model |
-| Governance EventBridge + Lambda | Writes deploy ARN to SSM; signals Workflow B |
-| Endpoint + API Gateway (Pass 2) | Serves approved package without re-running training |
+```text
+Non-Prod Approved → model-promote.yml → promote Lambda → Prod registry
+  → admin-run deploy-bu (plane=prod, business_unit=BU1|…)
+```
 
 ## Apply order
 
 ```text
-Pass 1a  hub-nonprod   DEV factory (storage, IAM, registry, governance, pipeline hooks)
-Pass 1b  hub-prod      PROD factory (prod data, SNS, deploy trigger, prod pipeline config)
-Pass 2   deploy-endpoint   Per approved model (endpoint, API Gateway, monitoring)
+Pass 1a  hub-nonprod
+Pass 1b  hub-prod
+Promote  Non-Prod → Prod registry
+Pass 2   deploy-endpoint / deploy-bu per BU
 ```
-
-## Registry and MLflow
-
-Wave-1 system of record is **SageMaker Model Registry** (`modules/registry/`). MLflow experiment tracking and a parallel registry store are planned for Phase 2.

@@ -81,57 +81,55 @@ Workflow B reads the approved `model_package_arn` from workflow input or the SSM
 
 Each new model repo copies `templates/model-project/`, adds a `pipeline.yaml`, and reuses the same infra factory. Only Pass 2 (`deploy-endpoint`) is repeated per approved model version.
 
-See `docs/ARCHITECTURE_MAP.md` for zone-to-path mapping and `infra/terraform/README.md` for module-level apply order.
+See `docs/ARCHITECTURE_MAP.md` and `docs/CONTROL_PLANE.md` for PPT zone-to-path mapping and `infra/terraform/README.md` for module-level apply order.
 
 ## Repository layout
 
 | Path | Purpose |
 |------|---------|
-| `infra/terraform/` | **Terraform modules** — DEV/PROD factory, evaluation-pipeline, endpoint deploy |
-| `docs/` | Architecture mapping (`ARCHITECTURE_MAP.md`) |
+| `infra/terraform/` | **Terraform** — Central Plane Non-Prod/Prod factories |
+| `docs/` | Architecture map + Central Plane alignment |
 | `deployment/` | CloudFormation templates — hub/spoke, KMS, governance |
 | `ml_platform/` | Pipeline builder + evaluation step modules |
 | `examples/credit-risk/` | Lighthouse model |
 | `templates/model-project/` | GitHub template for new model repos |
-| `lambdas/` | Governance capture + endpoint invoke |
-| `.github/workflows/` | Workflow A (CI), B (deploy), C (platform-infra) |
+| `lambdas/` | Governance, promote, invoke, GitHub dispatch |
+| `.github/workflows/` | Admin-Run, CI, promote, deploy, platform-infra |
 | `source/` | Reference notebooks for validation |
 
 ## Infrastructure
 
-**Terraform** (`infra/terraform/`) — modular factory:
+**Terraform** (`infra/terraform/`) — modular Central Plane factory:
 
 | Module | Purpose |
 |--------|---------|
+| `kms` | Platform CMK |
 | `network` | SageMaker security group in existing VPC |
 | `storage` | S3 data/artifacts buckets, ECR |
 | `iam` | Pipeline, training, inference, GHA OIDC roles |
 | `registry` | Model Package Group + RAM share |
-| `governance` | EventBridge → Lambda → DynamoDB |
+| `governance` | EventBridge → Lambda → DynamoDB Stage Governance |
+| `stage_analytics` | DynamoDB export → Athena → QuickSight/Power BI |
+| `bu_endpoints` | BU1/BU2/BU3/BU4 endpoints (API GW only in Prod) |
+| `promote` | Non-Prod → Prod registry promotion |
 | `evaluation-pipeline` | SSM + S3 paths for Train→Evaluate→Register |
-| `endpoint` | Deploy approved package (Workflow B) |
-| `monitoring` | CloudWatch alarms + SNS |
-| `step_functions` | Pipeline and deploy trigger state machines |
-| `api_gateway` | HTTP API for `/invocations` |
-| `sns` | Alert topic for prod monitoring |
-| `secrets` | Secrets Manager placeholders |
-| `cloudwatch` | Pipeline + endpoint dashboards |
+| `endpoint` | Deploy approved package |
+| `monitoring` | CloudWatch alarms + Model Monitor |
+| `waf` | Regional WAF for Prod API |
+| `api_gateway` | REST API for `/invocations` (Prod; WAF-compatible) |
+| `sns` / `secrets` / `cloudwatch` | Alerts, secrets, dashboards |
 
 ```bash
-# DEV zone (Pass 1a)
+# Non-Prod Central Plane (Pass 1a)
 cd infra/terraform/envs/hub-nonprod
-cp terraform.tfvars.example terraform.tfvars
 terraform init && terraform apply
 
-# PROD zone (Pass 1b)
+# Prod Central Plane (Pass 1b)
 cd infra/terraform/envs/hub-prod
-cp terraform.tfvars.example terraform.tfvars
 terraform init && terraform apply
 ```
 
-**CloudFormation** (`deployment/`) — hub/spoke SageMaker domains, model sharing, governance, and KMS cross-account policies.
-
-See `infra/terraform/README.md` for Pass 1 vs Pass 2 apply order.
+Use workflow **Admin Run** (`.github/workflows/admin-run.yml`) for plan/apply/promote/deploy-bu.
 
 ## Quick start — pipeline factory
 
@@ -152,7 +150,3 @@ POST /invocations
 Request:  { "features": [ ... ] }
 Response: { "prediction": <value>, "score": <0..1>, "model_version": "credit-risk:3" }
 ```
-
-## License
-
-MIT-0

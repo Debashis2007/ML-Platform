@@ -29,6 +29,10 @@ mlruns/
 infra/terraform/envs/**/.build/
 infra/terraform/modules/governance/build/
 
+# Test artifacts
+test/results/
+.pytest_cache/
+
 # Secrets
 *.pem
 credentials

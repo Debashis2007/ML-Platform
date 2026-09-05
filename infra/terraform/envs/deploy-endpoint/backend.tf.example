@@ -1,0 +1,12 @@
+# Example remote state backend. Copy to backend.tf (or pass via -backend-config)
+# before team/production applies.
+#
+# terraform {
+#   backend "s3" {
+#     bucket         = "YOUR_TF_STATE_BUCKET"
+#     key            = "ml-platform/deploy-endpoint/terraform.tfstate"
+#     region         = "us-east-1"
+#     dynamodb_table = "YOUR_TF_LOCK_TABLE"
+#     encrypt        = true
+#   }
+# }

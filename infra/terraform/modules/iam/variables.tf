@@ -26,6 +26,12 @@ variable "github_repo_subjects" {
   description = "OIDC subject claims, e.g. repo:org/ML-Platform:ref:refs/heads/main"
 }
 
+variable "kms_key_arn" {
+  type        = string
+  default     = null
+  description = "Optional CMK ARN for Encrypt/Decrypt on pipeline roles."
+}
+
 variable "tags" {
   type    = map(string)
   default = {}

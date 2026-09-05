@@ -69,7 +69,70 @@ variable "dev_test_model_package_arn" {
   default = ""
 }
 
+variable "enable_bu_endpoints" {
+  type        = bool
+  default     = false
+  description = "Create Central Plane DEV BU endpoints (BU1/BU2/BU3/BU4) without API Gateway."
+}
+
+variable "business_units" {
+  type = map(object({
+    endpoint_name       = string
+    model_package_arn   = string
+    instance_type       = optional(string, "ml.m5.large")
+    instance_count      = optional(number, 1)
+    enable_data_capture = optional(bool, true)
+    enable_multi_az     = optional(bool, false)
+  }))
+  default = {
+    BU1 = { endpoint_name = "bu1-credit-risk-dev", model_package_arn = "" }
+    BU2 = { endpoint_name = "bu2-credit-risk-dev", model_package_arn = "" }
+    BU3 = { endpoint_name = "bu3-credit-risk-dev", model_package_arn = "" }
+    BU4 = { endpoint_name = "bu4-credit-risk-dev", model_package_arn = "" }
+  }
+  description = "BU endpoint map. Set model_package_arn per BU to materialize that endpoint."
+}
+
+variable "athena_spill_bucket_name" {
+  type        = string
+  description = "Globally unique bucket for Athena spill + Stage Governance exports."
+}
+
+variable "quicksight_user_arn" {
+  type        = string
+  default     = ""
+  description = "Optional QuickSight user ARN. Leave empty if CRBG BI uses Power BI → Athena."
+}
+
+variable "enable_auto_deploy" {
+  type        = bool
+  default     = false
+  description = "Wire Model Approved → GitHub repository_dispatch (requires github_* vars + token)."
+}
+
+variable "github_owner" {
+  type    = string
+  default = ""
+}
+
+variable "github_repo" {
+  type    = string
+  default = ""
+}
+
+variable "github_dispatch_token" {
+  type        = string
+  default     = ""
+  sensitive   = true
+  description = "GitHub PAT or App token with repo dispatch scope. Prefer TF_VAR_github_dispatch_token."
+
+  validation {
+    condition     = !var.enable_auto_deploy || (var.github_dispatch_token != "" && var.github_owner != "" && var.github_repo != "")
+    error_message = "enable_auto_deploy requires github_dispatch_token, github_owner, and github_repo."
+  }
+}
+
 variable "tags" {
   type    = map(string)
-  default = { Environment = "hub-nonprod", ManagedBy = "terraform" }
+  default = { Environment = "hub-nonprod", Plane = "central-nonprod", ManagedBy = "terraform" }
 }

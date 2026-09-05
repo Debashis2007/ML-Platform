@@ -57,3 +57,31 @@ output "cloudwatch_dashboard_name" {
 output "sagemaker_security_group_id" {
   value = module.network.sagemaker_security_group_id
 }
+
+output "kms_key_arn" {
+  value = module.kms.key_arn
+}
+
+output "sns_alerts_topic_arn" {
+  value = module.sns.alerts_topic_arn
+}
+
+output "github_dispatch_secret_arn" {
+  value = module.secrets.github_dispatch_secret_arn
+}
+
+output "github_dispatch_lambda_arn" {
+  value = module.governance.github_dispatch_lambda_arn
+}
+
+output "athena_workgroup_name" {
+  value = module.stage_analytics.athena_workgroup_name
+}
+
+output "athena_jdbc_hint" {
+  value = module.stage_analytics.athena_jdbc_hint
+}
+
+output "bu_endpoint_names" {
+  value = try(module.bu_endpoints[0].endpoint_names, {})
+}

@@ -9,3 +9,11 @@ output "invoke_url" {
 output "lambda_arn" {
   value = aws_lambda_function.invoke.arn
 }
+
+output "stage_arn" {
+  value = aws_apigatewayv2_stage.default.arn
+}
+
+output "api_id" {
+  value = aws_apigatewayv2_api.http.id
+}
