@@ -161,7 +161,7 @@ def main() -> None:
         "model_approval_status": args.approval_status,
         "next_steps": [
             "Approve in Model Registry if still PendingManualApproval",
-            "Deploy with admin-run deploy-bu or model-deploy.yml",
+            "Deploy with platform-infra deploy-bu or ml-lifecycle.yml deploy job",
             "Set TF_VAR_model_package_arn / SSM to this ARN",
         ],
     }

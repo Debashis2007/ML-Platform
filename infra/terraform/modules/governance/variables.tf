@@ -8,8 +8,20 @@ variable "model_package_group_name" {
 
 variable "lambda_source_dir" {
   type        = string
-  description = "Directory containing capture_approval.zip (and optionally github_dispatch.zip)."
+  description = "Directory containing capture_approval.zip (zip fallback when image URI empty)."
   default     = ""
+}
+
+variable "capture_approval_image_uri" {
+  type        = string
+  default     = ""
+  description = "ECR image URI from platform-infra CI. When set, deploys container Lambda instead of zip."
+}
+
+variable "github_dispatch_image_uri" {
+  type        = string
+  default     = ""
+  description = "ECR image URI for github_dispatch Lambda (when enable_auto_deploy)."
 }
 
 variable "deploy_parameter_prefix" {

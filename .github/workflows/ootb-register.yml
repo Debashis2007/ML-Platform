@@ -66,4 +66,4 @@ jobs:
           echo '```json' >> "$GITHUB_STEP_SUMMARY"
           cat ootb-register.json >> "$GITHUB_STEP_SUMMARY"
           echo '```' >> "$GITHUB_STEP_SUMMARY"
-          echo "Next: approve (if needed) → model-deploy / admin-run deploy-bu with this model_package_arn." >> "$GITHUB_STEP_SUMMARY"
+          echo "Next: approve (if needed) → ml-lifecycle deploy or platform-infra deploy-bu with this model_package_arn." >> "$GITHUB_STEP_SUMMARY"

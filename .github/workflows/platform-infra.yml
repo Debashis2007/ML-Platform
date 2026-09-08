@@ -1,63 +1,204 @@
-name: Platform infra — Terraform
+name: Platform infra — Terraform & BU deploy
 
+# CI builds platform Lambda container images → ECR, then CD runs Terraform (client-aligned pattern).
 on:
   workflow_dispatch:
     inputs:
-      action:
-        description: Terraform action
+      operation:
+        description: Infra operation
         required: true
-        default: plan
         type: choice
         options:
           - plan
           - apply
-      environment:
-        description: Environment root module
-        required: true
-        default: hub-nonprod
+          - deploy-bu
+        default: plan
+      target:
+        description: Terraform root (plan/apply only)
+        required: false
         type: choice
         options:
           - hub-nonprod
           - hub-prod
           - deploy-endpoint
+        default: hub-nonprod
+      plane:
+        description: Plane for deploy-bu
+        required: false
+        type: choice
+        options:
+          - nonprod
+          - prod
+        default: nonprod
+      business_unit:
+        description: BU for deploy-bu (BU1/BU2/BU3/BU4)
+        required: false
+        type: choice
+        options:
+          - BU1
+          - BU2
+          - BU3
+          - BU4
+          - ""
+        default: BU1
+      model_package_arn:
+        description: Approved model package ARN for deploy-bu
+        required: false
+      skip_image_build:
+        description: Skip platform Lambda image CI (zip fallback — local dev only)
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   id-token: write
   contents: read
 
 concurrency:
-  group: platform-infra-${{ inputs.environment }}
+  group: platform-infra-${{ inputs.operation }}-${{ inputs.target || inputs.plane }}-${{ inputs.business_unit || 'all' }}
   cancel-in-progress: false
 
+env:
+  MLP_PLATFORM_LAMBDA_ECR_REPOSITORY: ${{ vars.MLP_PLATFORM_LAMBDA_ECR_REPOSITORY || 'mlp-platform-lambdas' }}
+
 jobs:
-  terraform:
+  build_platform_images:
+    if: inputs.skip_image_build != true
     runs-on: ubuntu-latest
-    environment: ${{ inputs.environment == 'hub-prod' && 'production' || 'nonprod' }}
-    defaults:
-      run:
-        working-directory: infra/terraform/envs/${{ inputs.environment }}
+    environment: ${{ (inputs.target == 'hub-prod' || inputs.plane == 'prod') && 'production' || 'nonprod' }}
+    outputs:
+      registry: ${{ steps.ecr.outputs.registry }}
+      image_tag: ${{ github.sha }}
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
       - uses: aws-actions/configure-aws-credentials@ececac1a45f3b08a01d2dd070d28d111c5fe6722 # v4.1.0
         with:
           role-to-assume: ${{ secrets.MLP_GHA_DEPLOY_ROLE_ARN }}
           aws-region: ${{ vars.AWS_REGION }}
-      - uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd # v3.1.2
+      - name: Resolve ECR registry
+        id: ecr
+        env:
+          AWS_REGION: ${{ vars.AWS_REGION }}
+        run: |
+          ACCOUNT="$(aws sts get-caller-identity --query Account --output text)"
+          echo "registry=${ACCOUNT}.dkr.ecr.${AWS_REGION}.amazonaws.com" >> "$GITHUB_OUTPUT"
+      - name: Login to ECR
+        uses: aws-actions/amazon-ecr-login@062b18b96a7aff071d4dc91bc00c4c1a7945b076 # v2.0.1
+      - name: Verify platform Lambda ECR repository exists
+        run: |
+          if ! aws ecr describe-repositories --repository-names "${MLP_PLATFORM_LAMBDA_ECR_REPOSITORY}" >/dev/null 2>&1; then
+            echo "::error::ECR repository ${MLP_PLATFORM_LAMBDA_ECR_REPOSITORY} not found."
+            echo "Run hub-nonprod apply once (creates module.storage platform ECR) or bootstrap with zip fallback, then re-run."
+            exit 1
+          fi
+      - name: Build and push platform Lambda images
+        env:
+          MLP_PLATFORM_ECR_REGISTRY: ${{ steps.ecr.outputs.registry }}
+          MLP_PLATFORM_LAMBDA_IMAGE_TAG: ${{ github.sha }}
+        run: bash scripts/build_push_platform_lambda_images.sh
+
+  terraform:
+    needs: build_platform_images
+    if: always() && (inputs.skip_image_build == true || needs.build_platform_images.result == 'success') && (inputs.operation == 'plan' || inputs.operation == 'apply')
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.target == 'hub-prod' && 'production' || 'nonprod' }}
+    env:
+      TF_VAR_platform_ecr_registry: ${{ inputs.skip_image_build != true && needs.build_platform_images.outputs.registry || '' }}
+      TF_VAR_platform_lambda_image_tag: ${{ inputs.skip_image_build != true && needs.build_platform_images.outputs.image_tag || '' }}
+      TF_VAR_platform_lambdas_ecr_repository_name: ${{ vars.MLP_PLATFORM_LAMBDA_ECR_REPOSITORY || 'mlp-platform-lambdas' }}
+    defaults:
+      run:
+        working-directory: infra/terraform/envs/${{ inputs.target }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: aws-actions/configure-aws-credentials@ececac1a45f3b08a01d2dd070d28d111c5fe6722 # v4.1.0
+        with:
+          role-to-assume: ${{ secrets.MLP_GHA_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+      - uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e888155d616ced269862dd # v3.1.2
         with:
           terraform_version: 1.9.0
       - name: Configure remote state backend
         env:
           MLP_TF_STATE_BUCKET: ${{ vars.MLP_TF_STATE_BUCKET }}
           MLP_TF_STATE_LOCK_TABLE: ${{ vars.MLP_TF_STATE_LOCK_TABLE }}
-          MLP_TF_STATE_KEY: ml-platform/${{ inputs.environment }}.tfstate
+          MLP_TF_STATE_KEY: ml-platform/${{ inputs.target }}.tfstate
           AWS_REGION: ${{ vars.AWS_REGION }}
-          TF_ENV_NAME: ${{ inputs.environment }}
+          TF_ENV_NAME: ${{ inputs.target }}
         run: bash ${{ github.workspace }}/scripts/terraform_remote_backend.sh
       - name: Terraform init
         run: terraform init -input=false
       - name: Terraform plan
-        if: inputs.action == 'plan' || inputs.action == 'apply'
+        if: inputs.operation == 'plan' || inputs.operation == 'apply'
         run: terraform plan -out=tfplan
       - name: Terraform apply
-        if: inputs.action == 'apply'
+        if: inputs.operation == 'apply'
         run: terraform apply -auto-approve tfplan
+
+  deploy_bu:
+    needs: build_platform_images
+    if: always() && (inputs.skip_image_build == true || needs.build_platform_images.result == 'success') && inputs.operation == 'deploy-bu'
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.plane == 'prod' && 'production' || 'nonprod' }}
+    env:
+      TF_VAR_platform_ecr_registry: ${{ inputs.skip_image_build != true && needs.build_platform_images.outputs.registry || '' }}
+      TF_VAR_platform_lambda_image_tag: ${{ inputs.skip_image_build != true && needs.build_platform_images.outputs.image_tag || '' }}
+      TF_VAR_platform_lambdas_ecr_repository_name: ${{ vars.MLP_PLATFORM_LAMBDA_ECR_REPOSITORY || 'mlp-platform-lambdas' }}
+    defaults:
+      run:
+        working-directory: infra/terraform/envs/deploy-endpoint
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: aws-actions/configure-aws-credentials@ececac1a45f3b08a01d2dd070d28d111c5fe6722 # v4.1.0
+        with:
+          role-to-assume: ${{ secrets.MLP_GHA_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+      - uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e888155d616ced269862dd # v3.1.2
+        with:
+          terraform_version: 1.9.0
+      - name: Resolve package ARN
+        id: model
+        env:
+          INPUT_ARN: ${{ inputs.model_package_arn }}
+          SSM_PARAM: ${{ vars.MLP_DEPLOY_SSM_PARAM }}
+          BU: ${{ inputs.business_unit }}
+        run: |
+          if [ -n "$INPUT_ARN" ]; then
+            echo "arn=$INPUT_ARN" >> "$GITHUB_OUTPUT"
+          elif [ -n "$BU" ] && [ -n "$SSM_PARAM" ]; then
+            ARN=$(aws ssm get-parameter --name "${SSM_PARAM%/*}/$BU/model_package_arn" --query Parameter.Value --output text)
+            echo "arn=$ARN" >> "$GITHUB_OUTPUT"
+          else
+            ARN=$(aws ssm get-parameter --name "$SSM_PARAM" --query Parameter.Value --output text)
+            echo "arn=$ARN" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Configure remote state backend
+        env:
+          MLP_TF_STATE_BUCKET: ${{ vars.MLP_TF_STATE_BUCKET }}
+          MLP_TF_STATE_LOCK_TABLE: ${{ vars.MLP_TF_STATE_LOCK_TABLE }}
+          MLP_TF_STATE_KEY: ml-platform/deploy-endpoint-${{ inputs.business_unit || 'default' }}-${{ inputs.plane }}.tfstate
+          AWS_REGION: ${{ vars.AWS_REGION }}
+        run: bash ${{ github.workspace }}/scripts/terraform_remote_backend.sh
+      - run: terraform init -input=false
+      - name: Terraform apply BU endpoint
+        env:
+          TF_VAR_model_package_arn: ${{ steps.model.outputs.arn }}
+          TF_VAR_vpc_id: ${{ vars.MLP_VPC_ID }}
+          TF_VAR_subnet_ids: ${{ vars.MLP_SUBNET_IDS }}
+          TF_VAR_inference_role_arn: ${{ vars.MLP_INFERENCE_ROLE_ARN }}
+          TF_VAR_invoke_lambda_role_arn: ${{ vars.MLP_INVOKE_LAMBDA_ROLE_ARN }}
+          TF_VAR_apigateway_cloudwatch_role_arn: ${{ vars.MLP_APIGW_CLOUDWATCH_ROLE_ARN }}
+          TF_VAR_endpoint_name: ${{ vars.MLP_ENDPOINT_NAME || 'credit-risk' }}
+          TF_VAR_business_unit: ${{ inputs.business_unit }}
+          TF_VAR_enable_api_gateway: ${{ inputs.plane == 'prod' }}
+          TF_VAR_kms_key_arn: ${{ vars.MLP_KMS_KEY_ARN }}
+          TF_VAR_artifacts_bucket_name: ${{ vars.MLP_ARTIFACTS_BUCKET }}
+        run: |
+          if [ -n "${{ inputs.business_unit }}" ]; then
+            BU=$(echo "${{ inputs.business_unit }}" | tr '[:upper:]' '[:lower:]')
+            SUFFIX=""
+            if [ "${{ inputs.plane }}" = "nonprod" ]; then SUFFIX="-dev"; fi
+            export TF_VAR_endpoint_name="${BU}-credit-risk${SUFFIX}"
+          fi
+          terraform plan -out=tfplan
+          terraform apply -auto-approve tfplan

@@ -1,0 +1,279 @@
+name: ML lifecycle — train · promote · deploy
+
+# Consolidated ML CI/CD: replaces model-ci.yml, model-promote.yml, model-deploy.yml
+on:
+  push:
+    branches: [main]
+    paths:
+      - "examples/**"
+      - "templates/**"
+      - "ml_platform/**"
+      - "lambdas/**"
+      - "tests/**"
+      - "requirements.txt"
+      - ".github/workflows/ml-lifecycle.yml"
+  pull_request:
+    paths:
+      - "examples/**"
+      - "templates/**"
+      - "ml_platform/**"
+      - "lambdas/**"
+      - "tests/**"
+      - "requirements.txt"
+      - ".github/workflows/ml-lifecycle.yml"
+  workflow_dispatch:
+    inputs:
+      phase:
+        description: Release phase (train runs only on push to main)
+        required: true
+        type: choice
+        options:
+          - release
+          - promote-only
+          - deploy-only
+        default: release
+      model_package_arn:
+        description: Approved Non-Prod model package ARN (promote / deploy)
+        required: false
+      business_unit:
+        description: BU (BU1/BU2/BU3/BU4)
+        required: false
+        type: choice
+        options:
+          - BU1
+          - BU2
+          - BU3
+          - BU4
+        default: BU1
+  repository_dispatch:
+    types: [model-approved]
+
+permissions:
+  id-token: write
+  contents: read
+
+concurrency:
+  group: ml-lifecycle-release-${{ github.event.client_payload.model_package_arn || github.event.inputs.model_package_arn || 'latest' }}
+  cancel-in-progress: false
+
+env:
+  MODEL_NAME: credit-risk
+  PIPELINE_CONFIG: examples/credit-risk/pipeline.yaml
+
+jobs:
+  test:
+    if: github.event_name == 'push' || github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/setup-python@42375524e23c412d93fb67b49958b491fce71c38 # v5.4.0
+        with:
+          python-version: "3.11"
+      - run: pip install -r requirements.txt
+      - name: Unit tests
+        run: |
+          mkdir -p test/results
+          python -m pytest tests/ -q --junitxml=test/results/junit.xml
+      - name: Validate pipeline.yaml
+        run: python -c "from ml_platform.config import PipelineConfig; print(PipelineConfig.load('${{ env.PIPELINE_CONFIG }}'))"
+      - name: Build pipeline definition
+        env:
+          AWS_DEFAULT_REGION: ${{ vars.AWS_REGION || 'us-east-1' }}
+          AWS_REGION: ${{ vars.AWS_REGION || 'us-east-1' }}
+        run: python ml_platform/build_pipeline.py --config ${{ env.PIPELINE_CONFIG }}
+
+  train:
+    needs: test
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment: nonprod
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/setup-python@42375524e23c412d93fb67b49958b491fce71c38 # v5.4.0
+        with:
+          python-version: "3.11"
+      - run: pip install -r requirements.txt
+      - name: Configure AWS (OIDC)
+        uses: aws-actions/configure-aws-credentials@ececac1a45f3b08a01d2dd070d28d111c5fe6722 # v4.1.0
+        with:
+          role-to-assume: ${{ secrets.MLP_GHA_PIPELINE_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+      - name: Login to ECR
+        id: ecr
+        uses: aws-actions/amazon-ecr-login@062b18b96a7aff071d4dc91bc00c4c1a7945b076 # v2.0.1
+      - name: Docker build & push ECR
+        id: docker
+        env:
+          ECR_REGISTRY: ${{ steps.ecr.outputs.registry }}
+          ECR_REPOSITORY: ${{ vars.MLP_ECR_REPOSITORY || 'ml-platform-models' }}
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          docker build -t "$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" examples/credit-risk
+          docker push "$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
+          echo "image_uri=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" >> "$GITHUB_OUTPUT"
+      - name: Upsert SageMaker Pipeline
+        env:
+          PIPELINE_ROLE_ARN: ${{ vars.MLP_PIPELINE_ROLE_ARN }}
+        run: |
+          python ml_platform/build_pipeline.py \
+            --config ${{ env.PIPELINE_CONFIG }} \
+            --upsert --role-arn "$PIPELINE_ROLE_ARN"
+      - name: Start pipeline execution
+        env:
+          PIPELINE_ROLE_ARN: ${{ vars.MLP_PIPELINE_ROLE_ARN }}
+          DATA_URI: ${{ vars.MLP_TRAIN_DATA_URI }}
+          OUTPUT_PREFIX: ${{ vars.MLP_PIPELINE_OUTPUT_PREFIX }}
+          IMAGE_URI: ${{ steps.docker.outputs.image_uri }}
+        run: |
+          python ml_platform/run_pipeline.py \
+            --pipeline-name ${{ env.MODEL_NAME }} \
+            --role-arn "$PIPELINE_ROLE_ARN" \
+            --image-uri "$IMAGE_URI" \
+            --data-uri "$DATA_URI" \
+            --output-prefix "$OUTPUT_PREFIX"
+
+  promote:
+    if: |
+      github.event_name == 'repository_dispatch' ||
+      (github.event_name == 'workflow_dispatch' && inputs.phase != 'deploy-only')
+    runs-on: ubuntu-latest
+    environment: production
+    outputs:
+      package_arn: ${{ steps.promote.outputs.promoted_arn }}
+      business_unit: ${{ steps.bu.outputs.bu }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: aws-actions/configure-aws-credentials@ececac1a45f3b08a01d2dd070d28d111c5fe6722 # v4.1.0
+        with:
+          role-to-assume: ${{ secrets.MLP_GHA_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+      - name: Resolve source package ARN
+        id: source
+        env:
+          INPUT_ARN: ${{ github.event.inputs.model_package_arn || github.event.client_payload.model_package_arn }}
+        run: |
+          test -n "$INPUT_ARN"
+          echo "arn=$INPUT_ARN" >> "$GITHUB_OUTPUT"
+      - name: Resolve business unit
+        id: bu
+        env:
+          BU: ${{ github.event.inputs.business_unit || github.event.client_payload.business_unit || 'BU1' }}
+        run: echo "bu=$BU" >> "$GITHUB_OUTPUT"
+      - name: Promote package into Prod registry
+        id: promote
+        env:
+          PROMOTE_FN: ${{ vars.MLP_PROMOTE_LAMBDA_NAME }}
+          SOURCE_ARN: ${{ steps.source.outputs.arn }}
+          BU: ${{ steps.bu.outputs.bu }}
+        run: |
+          test -n "$PROMOTE_FN"
+          PAYLOAD=$(jq -nc --arg arn "$SOURCE_ARN" --arg bu "$BU" \
+            '{source_model_package_arn:$arn, business_unit:$bu, detail:{model_package_arn:$arn, business_unit:$bu}}')
+          aws lambda invoke --function-name "$PROMOTE_FN" --payload "$PAYLOAD" out.json
+          cat out.json
+          PROMOTED=$(python3 -c "import json; print(json.load(open('out.json')).get('promoted_model_package_arn') or json.loads(json.load(open('out.json')).get('body','{}')).get('promoted_model_package_arn',''))")
+          echo "promoted_arn=$PROMOTED" >> "$GITHUB_OUTPUT"
+
+  deploy:
+    needs: promote
+    if: |
+      always() && (
+        (github.event_name == 'repository_dispatch' && needs.promote.result == 'success') ||
+        (github.event_name == 'workflow_dispatch' && inputs.phase == 'deploy-only') ||
+        (github.event_name == 'workflow_dispatch' && inputs.phase == 'release' && needs.promote.result == 'success')
+      )
+    runs-on: ubuntu-latest
+    environment: production
+    defaults:
+      run:
+        working-directory: infra/terraform/envs/deploy-endpoint
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: aws-actions/configure-aws-credentials@ececac1a45f3b08a01d2dd070d28d111c5fe6722 # v4.1.0
+        with:
+          role-to-assume: ${{ secrets.MLP_GHA_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+      - name: Resolve model package ARN
+        id: model
+        env:
+          INPUT_ARN: ${{ github.event.inputs.model_package_arn || github.event.client_payload.model_package_arn }}
+          PROMOTED_ARN: ${{ needs.promote.outputs.package_arn }}
+          SSM_PARAM: ${{ vars.MLP_DEPLOY_SSM_PARAM || '/mlp-hub-nonprod/deploy/model_package_arn' }}
+          BU: ${{ needs.promote.outputs.business_unit || github.event.inputs.business_unit || github.event.client_payload.business_unit || 'BU1' }}
+        run: |
+          if [ -n "$PROMOTED_ARN" ]; then
+            echo "arn=$PROMOTED_ARN" >> "$GITHUB_OUTPUT"
+          elif [ -n "$INPUT_ARN" ]; then
+            echo "arn=$INPUT_ARN" >> "$GITHUB_OUTPUT"
+          else
+            ARN=$(aws ssm get-parameter --name "$SSM_PARAM" --query Parameter.Value --output text)
+            echo "arn=$ARN" >> "$GITHUB_OUTPUT"
+          fi
+          echo "bu=$BU" >> "$GITHUB_OUTPUT"
+      - name: Resolve ECR registry
+        id: ecr
+        env:
+          AWS_REGION: ${{ vars.AWS_REGION }}
+        run: |
+          ACCOUNT="$(aws sts get-caller-identity --query Account --output text)"
+          echo "registry=${ACCOUNT}.dkr.ecr.${AWS_REGION}.amazonaws.com" >> "$GITHUB_OUTPUT"
+      - name: Build and push platform Lambda images
+        env:
+          AWS_REGION: ${{ vars.AWS_REGION }}
+          MLP_PLATFORM_ECR_REGISTRY: ${{ steps.ecr.outputs.registry }}
+          MLP_PLATFORM_LAMBDA_ECR_REPOSITORY: ${{ vars.MLP_PLATFORM_LAMBDA_ECR_REPOSITORY || 'mlp-platform-lambdas' }}
+          MLP_PLATFORM_LAMBDA_IMAGE_TAG: ${{ github.sha }}
+        run: |
+          aws ecr get-login-password --region "$AWS_REGION" | docker login --username AWS --password-stdin "$MLP_PLATFORM_ECR_REGISTRY"
+          bash ${{ github.workspace }}/scripts/build_push_platform_lambda_images.sh
+      - uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e888155d616ced269862dd # v3.1.2
+        with:
+          terraform_version: 1.9.0
+      - name: Configure remote state backend
+        env:
+          MLP_TF_STATE_BUCKET: ${{ vars.MLP_TF_STATE_BUCKET }}
+          MLP_TF_STATE_LOCK_TABLE: ${{ vars.MLP_TF_STATE_LOCK_TABLE }}
+          MLP_TF_STATE_KEY: ml-platform/deploy-endpoint-${{ steps.model.outputs.bu }}-prod.tfstate
+          AWS_REGION: ${{ vars.AWS_REGION }}
+        run: bash ${{ github.workspace }}/scripts/terraform_remote_backend.sh
+      - name: Terraform init
+        run: terraform init -input=false
+      - name: Terraform plan & apply endpoint
+        env:
+          TF_VAR_platform_ecr_registry: ${{ steps.ecr.outputs.registry }}
+          TF_VAR_platform_lambda_image_tag: ${{ github.sha }}
+          TF_VAR_platform_lambdas_ecr_repository_name: ${{ vars.MLP_PLATFORM_LAMBDA_ECR_REPOSITORY || 'mlp-platform-lambdas' }}
+          TF_VAR_model_package_arn: ${{ steps.model.outputs.arn }}
+          TF_VAR_vpc_id: ${{ vars.MLP_VPC_ID }}
+          TF_VAR_subnet_ids: ${{ vars.MLP_SUBNET_IDS }}
+          TF_VAR_inference_role_arn: ${{ vars.MLP_INFERENCE_ROLE_ARN }}
+          TF_VAR_invoke_lambda_role_arn: ${{ vars.MLP_INVOKE_LAMBDA_ROLE_ARN }}
+          TF_VAR_apigateway_cloudwatch_role_arn: ${{ vars.MLP_APIGW_CLOUDWATCH_ROLE_ARN }}
+          TF_VAR_endpoint_name: ${{ vars.MLP_ENDPOINT_NAME || 'credit-risk' }}
+          TF_VAR_business_unit: ${{ steps.model.outputs.bu }}
+          TF_VAR_enable_api_gateway: "true"
+          TF_VAR_kms_key_arn: ${{ vars.MLP_KMS_KEY_ARN }}
+          TF_VAR_artifacts_bucket_name: ${{ vars.MLP_ARTIFACTS_BUCKET }}
+          TF_VAR_enable_model_monitor: ${{ vars.MLP_ENABLE_MODEL_MONITOR || 'false' }}
+          TF_VAR_monitoring_image_uri: ${{ vars.MLP_MONITOR_IMAGE_URI }}
+          TF_VAR_baseline_constraints_s3_uri: ${{ vars.MLP_BASELINE_CONSTRAINTS_URI }}
+          TF_VAR_baseline_statistics_s3_uri: ${{ vars.MLP_BASELINE_STATISTICS_URI }}
+          TF_VAR_monitoring_output_s3_uri: ${{ vars.MLP_MONITOR_OUTPUT_URI }}
+        run: |
+          BU=$(echo "${{ steps.model.outputs.bu }}" | tr '[:upper:]' '[:lower:]')
+          export TF_VAR_endpoint_name="${BU}-credit-risk"
+          terraform plan -out=tfplan
+          terraform apply -auto-approve tfplan
+      - name: Smoke test /invocations
+        env:
+          API_URL: ${{ vars.MLP_API_INVOKE_URL }}
+          AWS_REGION: ${{ vars.AWS_REGION }}
+        run: |
+          if [ -z "$API_URL" ]; then
+            echo "MLP_API_INVOKE_URL not set; skipping smoke test"
+            exit 0
+          fi
+          curl -sf --aws-sigv4 "aws:amz:${AWS_REGION}:execute-api" \
+            -X POST "$API_URL/invocations" \
+            -H "Content-Type: application/json" \
+            -d '{"features":[0.1,0.2,0.3]}'

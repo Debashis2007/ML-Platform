@@ -30,11 +30,11 @@ Or via GitHub Actions: workflow **OOTB JumpStart — register** (`ootb-register.
 ## Deploy
 
 1. Approve the package in Model Registry (skip if you passed `--approval-status Approved` for Non-Prod smoke).
-2. Run **model-deploy** / **admin-run → deploy-bu** with:
+2. Run **ml-lifecycle deploy** / **platform-infra → deploy-bu** with:
    - `model_package_arn` = ARN printed by the register step
    - `endpoint_name` = e.g. `ootb-xgboost` (or BU name as usual)
 3. Invoke the endpoint (CSV for default XGBoost JumpStart), or Prod API `POST /invocations` if your invoke Lambda is adapted for that payload.
 
 ## Switch back to credit-risk
 
-Keep using `model-ci.yml` + `examples/credit-risk/` for Train → Evaluate → Register. OOTB is only for platform plumbing validation.
+Keep using `ml-lifecycle.yml` + `examples/credit-risk/` for Train → Evaluate → Register. OOTB is only for platform plumbing validation.

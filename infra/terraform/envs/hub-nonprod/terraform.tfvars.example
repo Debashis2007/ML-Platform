@@ -1,4 +1,6 @@
 # Copy to terraform.tfvars and fill in account-specific values.
+# Target AWS account: ML-NonProd (ML Central Plane).
+# Account inventory: docs/ACCOUNTS_AND_ROLES.md
 
 aws_region                = "us-east-1"
 name_prefix               = "mlp-hub-nonprod"
@@ -19,4 +21,8 @@ inference_role_arn           = "arn:aws:iam::ACCOUNT_ID:role/mlp-sagemaker-infer
 governance_lambda_role_arn   = "arn:aws:iam::ACCOUNT_ID:role/mlp-governance-lambda"
 stage_export_lambda_role_arn = "arn:aws:iam::ACCOUNT_ID:role/mlp-governance-export"
 step_functions_role_arn      = "arn:aws:iam::ACCOUNT_ID:role/mlp-pipeline-trigger"
-# github_dispatch_lambda_role_arn = "arn:aws:iam::ACCOUNT_ID:role/mlp-github-dispatch"
+# Platform Lambda container images (set by platform-infra CI before apply; empty = zip fallback)
+# platform_ecr_registry         = "123456789012.dkr.ecr.us-east-1.amazonaws.com"
+# platform_lambda_image_tag     = "abc123def456"
+# platform_lambdas_ecr_repository_name = "mlp-platform-lambdas"
+

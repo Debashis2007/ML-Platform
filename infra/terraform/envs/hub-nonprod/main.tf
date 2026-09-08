@@ -54,8 +54,9 @@ module "storage" {
   data_bucket_name          = var.data_bucket_name
   dev_artifacts_bucket_name = var.dev_artifacts_bucket_name
   artifacts_bucket_name     = var.artifacts_bucket_name
-  ecr_repository_name       = var.ecr_repository_name
-  kms_key_arn               = module.kms.key_arn
+  ecr_repository_name                = var.ecr_repository_name
+  platform_lambdas_ecr_repository_name = var.platform_lambdas_ecr_repository_name
+  kms_key_arn                        = module.kms.key_arn
   tags                      = var.tags
 }
 
@@ -93,6 +94,8 @@ module "governance" {
   github_token_secret_arn         = coalesce(module.secrets.github_dispatch_secret_arn, "")
   governance_lambda_role_arn      = var.governance_lambda_role_arn
   github_dispatch_lambda_role_arn = var.github_dispatch_lambda_role_arn
+  capture_approval_image_uri      = module.platform_lambda_uris.capture_approval
+  github_dispatch_image_uri       = module.platform_lambda_uris.github_dispatch
   tags                            = var.tags
 
   depends_on = [
@@ -152,8 +155,9 @@ module "stage_analytics" {
   governance_table_arn   = module.governance.governance_table_arn
   kms_key_arn            = module.kms.key_arn
   spill_bucket_name      = var.athena_spill_bucket_name
-  export_lambda_role_arn = var.stage_export_lambda_role_arn
-  quicksight_user_arn    = var.quicksight_user_arn
+  export_lambda_role_arn      = var.stage_export_lambda_role_arn
+  governance_export_image_uri = module.platform_lambda_uris.governance_export
+  quicksight_user_arn         = var.quicksight_user_arn
   tags                   = var.tags
 }
 
@@ -167,9 +171,10 @@ module "bu_endpoints" {
   subnet_ids            = module.network.subnet_ids
   security_group_ids    = [module.network.sagemaker_security_group_id]
   artifacts_bucket_name = module.storage.artifacts_bucket_name
-  kms_key_arn           = module.kms.key_arn
-  enable_api_gateway    = false
-  tags                  = var.tags
+  kms_key_arn               = module.kms.key_arn
+  enable_api_gateway        = false
+  invoke_endpoint_image_uri = module.platform_lambda_uris.invoke_endpoint
+  tags                      = var.tags
 }
 
 module "dev_test_endpoint" {

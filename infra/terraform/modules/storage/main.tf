@@ -70,6 +70,22 @@ resource "aws_ecr_repository" "models" {
   tags = merge(var.tags, { Name = var.ecr_repository_name })
 }
 
+resource "aws_ecr_repository" "platform_lambdas" {
+  name                 = var.platform_lambdas_ecr_repository_name
+  image_tag_mutability = "IMMUTABLE"
+  image_scanning_configuration { scan_on_push = true }
+
+  dynamic "encryption_configuration" {
+    for_each = var.kms_key_arn != null ? [1] : []
+    content {
+      encryption_type = "KMS"
+      kms_key         = var.kms_key_arn
+    }
+  }
+
+  tags = merge(var.tags, { Name = var.platform_lambdas_ecr_repository_name, Layer = "platform-lambdas" })
+}
+
 resource "aws_s3_bucket" "dev_artifacts" {
   bucket = var.dev_artifacts_bucket_name
   tags   = merge(var.tags, { Name = var.dev_artifacts_bucket_name, Layer = "dev-artifacts" })

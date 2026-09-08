@@ -45,6 +45,12 @@ variable "lambda_source_hash" {
   default = ""
 }
 
+variable "invoke_endpoint_image_uri" {
+  type        = string
+  default     = ""
+  description = "ECR image URI for invoke Lambda (from platform-infra CI)."
+}
+
 variable "invoke_lambda_role_arn" {
   type        = string
   default     = ""

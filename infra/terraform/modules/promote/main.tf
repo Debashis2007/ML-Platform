@@ -11,15 +11,23 @@ resource "aws_cloudwatch_log_group" "promote" {
   tags              = var.tags
 }
 
+locals {
+  promote_use_image = var.promote_model_image_uri != ""
+}
+
 resource "aws_lambda_function" "promote" {
-  function_name    = "${var.name_prefix}-promote-model"
-  role             = var.lambda_role_arn
-  handler          = "handler.lambda_handler"
-  runtime          = "python3.11"
-  timeout          = 60
-  memory_size      = 256
-  filename         = var.lambda_zip_path
-  source_code_hash = var.lambda_source_hash
+  function_name = "${var.name_prefix}-promote-model"
+  role          = var.lambda_role_arn
+  timeout       = 60
+  memory_size   = 256
+
+  package_type = local.promote_use_image ? "Image" : "Zip"
+  image_uri    = local.promote_use_image ? var.promote_model_image_uri : null
+
+  handler          = local.promote_use_image ? null : "handler.lambda_handler"
+  runtime          = local.promote_use_image ? null : "python3.11"
+  filename         = local.promote_use_image ? null : var.lambda_zip_path
+  source_code_hash = local.promote_use_image ? null : var.lambda_source_hash
 
   environment {
     variables = {

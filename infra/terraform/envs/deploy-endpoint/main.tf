@@ -77,11 +77,12 @@ module "api_gateway" {
   count  = var.enable_api_gateway ? 1 : 0
 
   name_prefix        = var.name_prefix
-  endpoint_name      = module.endpoint.endpoint_name
-  endpoint_arn       = module.endpoint.endpoint_arn
-  lambda_zip_path    = data.archive_file.invoke_endpoint_lambda.output_path
-  lambda_source_hash = data.archive_file.invoke_endpoint_lambda.output_base64sha256
-  lambda_role_arn    = var.invoke_lambda_role_arn
+  endpoint_name             = module.endpoint.endpoint_name
+  endpoint_arn              = module.endpoint.endpoint_arn
+  lambda_zip_path           = data.archive_file.invoke_endpoint_lambda.output_path
+  lambda_source_hash        = data.archive_file.invoke_endpoint_lambda.output_base64sha256
+  invoke_endpoint_image_uri = module.platform_lambda_uris.invoke_endpoint
+  lambda_role_arn           = var.invoke_lambda_role_arn
   enable_iam_auth    = var.enable_api_iam_auth
   tags               = var.tags
 

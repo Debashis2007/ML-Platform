@@ -46,16 +46,24 @@ resource "aws_cloudwatch_log_group" "capture_approval" {
   tags              = var.tags
 }
 
+locals {
+  capture_use_image         = var.capture_approval_image_uri != ""
+  github_dispatch_use_image = var.github_dispatch_image_uri != ""
+}
+
 resource "aws_lambda_function" "capture_approval" {
   function_name = "${var.name_prefix}-capture-approval"
   role          = var.governance_lambda_role_arn
-  handler       = "handler.lambda_handler"
-  runtime       = "python3.11"
   timeout       = 30
   memory_size   = 256
 
-  filename         = var.lambda_source_dir != "" ? "${var.lambda_source_dir}/capture_approval.zip" : "${path.module}/build/capture_approval.zip"
-  source_code_hash = var.lambda_source_dir != "" ? filebase64sha256("${var.lambda_source_dir}/capture_approval.zip") : filebase64sha256("${path.module}/build/capture_approval.zip")
+  package_type = local.capture_use_image ? "Image" : "Zip"
+  image_uri    = local.capture_use_image ? var.capture_approval_image_uri : null
+
+  handler          = local.capture_use_image ? null : "handler.lambda_handler"
+  runtime          = local.capture_use_image ? null : "python3.11"
+  filename         = local.capture_use_image ? null : (var.lambda_source_dir != "" ? "${var.lambda_source_dir}/capture_approval.zip" : "${path.module}/build/capture_approval.zip")
+  source_code_hash = local.capture_use_image ? null : (var.lambda_source_dir != "" ? filebase64sha256("${var.lambda_source_dir}/capture_approval.zip") : filebase64sha256("${path.module}/build/capture_approval.zip"))
 
   environment {
     variables = {
@@ -122,13 +130,16 @@ resource "aws_lambda_function" "github_dispatch" {
   count         = var.enable_auto_deploy ? 1 : 0
   function_name = "${var.name_prefix}-github-dispatch"
   role          = var.github_dispatch_lambda_role_arn
-  handler       = "handler.lambda_handler"
-  runtime       = "python3.11"
   timeout       = 30
   memory_size   = 256
 
-  filename         = "${var.lambda_source_dir}/github_dispatch.zip"
-  source_code_hash = filebase64sha256("${var.lambda_source_dir}/github_dispatch.zip")
+  package_type = local.github_dispatch_use_image ? "Image" : "Zip"
+  image_uri    = local.github_dispatch_use_image ? var.github_dispatch_image_uri : null
+
+  handler          = local.github_dispatch_use_image ? null : "handler.lambda_handler"
+  runtime          = local.github_dispatch_use_image ? null : "python3.11"
+  filename         = local.github_dispatch_use_image ? null : "${var.lambda_source_dir}/github_dispatch.zip"
+  source_code_hash = local.github_dispatch_use_image ? null : filebase64sha256("${var.lambda_source_dir}/github_dispatch.zip")
 
   environment {
     variables = {

@@ -56,8 +56,9 @@ module "storage" {
   dev_artifacts_bucket_name = var.dev_artifacts_bucket_name
   artifacts_bucket_name     = var.artifacts_bucket_name
   prod_data_bucket_name     = var.prod_data_bucket_name
-  ecr_repository_name       = var.ecr_repository_name
-  kms_key_arn               = module.kms.key_arn
+  ecr_repository_name                  = var.ecr_repository_name
+  platform_lambdas_ecr_repository_name = var.platform_lambdas_ecr_repository_name
+  kms_key_arn                          = module.kms.key_arn
   tags                      = var.tags
 }
 
@@ -97,6 +98,8 @@ module "governance" {
   github_token_secret_arn         = coalesce(module.secrets.github_dispatch_secret_arn, "")
   governance_lambda_role_arn      = var.governance_lambda_role_arn
   github_dispatch_lambda_role_arn = var.github_dispatch_lambda_role_arn
+  capture_approval_image_uri      = module.platform_lambda_uris.capture_approval
+  github_dispatch_image_uri       = module.platform_lambda_uris.github_dispatch
   tags                            = var.tags
 
   depends_on = [
@@ -164,8 +167,9 @@ module "stage_analytics" {
   governance_table_arn  = module.governance[0].governance_table_arn
   kms_key_arn            = module.kms.key_arn
   spill_bucket_name      = var.athena_spill_bucket_name
-  export_lambda_role_arn = var.stage_export_lambda_role_arn
-  quicksight_user_arn    = var.quicksight_user_arn
+  export_lambda_role_arn      = var.stage_export_lambda_role_arn
+  governance_export_image_uri = module.platform_lambda_uris.governance_export
+  quicksight_user_arn         = var.quicksight_user_arn
   tags                   = var.tags
 }
 
@@ -188,9 +192,10 @@ module "promote" {
   source = "../../modules/promote"
 
   name_prefix                = var.name_prefix
-  lambda_zip_path            = data.archive_file.promote_lambda[0].output_path
-  lambda_source_hash         = data.archive_file.promote_lambda[0].output_base64sha256
-  lambda_role_arn            = var.promote_lambda_role_arn
+  lambda_zip_path         = data.archive_file.promote_lambda[0].output_path
+  lambda_source_hash      = data.archive_file.promote_lambda[0].output_base64sha256
+  promote_model_image_uri = module.platform_lambda_uris.promote_model
+  lambda_role_arn         = var.promote_lambda_role_arn
   target_model_package_group = var.model_package_group_name
   deploy_parameter_prefix    = "/${var.name_prefix}/deploy"
   kms_key_arn                = module.kms.key_arn
@@ -219,10 +224,11 @@ module "bu_endpoints" {
   artifacts_bucket_name  = module.storage.artifacts_bucket_name
   kms_key_arn            = module.kms.key_arn
   enable_api_gateway     = true
-  enable_waf             = var.enable_waf
-  lambda_zip_path        = data.archive_file.invoke_endpoint_lambda[0].output_path
-  lambda_source_hash     = data.archive_file.invoke_endpoint_lambda[0].output_base64sha256
-  tags                   = var.tags
+  enable_waf                  = var.enable_waf
+  lambda_zip_path             = data.archive_file.invoke_endpoint_lambda[0].output_path
+  lambda_source_hash          = data.archive_file.invoke_endpoint_lambda[0].output_base64sha256
+  invoke_endpoint_image_uri   = module.platform_lambda_uris.invoke_endpoint
+  tags                        = var.tags
 
   depends_on = [module.api_gateway_account]
 }

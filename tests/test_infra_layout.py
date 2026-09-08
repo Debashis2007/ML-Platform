@@ -69,8 +69,32 @@ def test_lambda_sources_present():
         assert Path(f"lambdas/{name}/handler.py").is_file()
 
 
+def test_platform_lambda_container_ci_assets():
+    """Platform infra CI builds Lambda images → ECR before Terraform CD."""
+    assert Path("scripts/build_push_platform_lambda_images.sh").is_file()
+    assert (ROOT / "modules/platform_lambda_uris/outputs.tf").is_file()
+    for rel in (
+        "lambdas/capture_approval_event/Dockerfile",
+        "lambdas/trigger_github_deploy/Dockerfile",
+        "lambdas/promote_model_package/Dockerfile",
+        "lambdas/invoke_endpoint/Dockerfile",
+        "infra/terraform/modules/stage_analytics/lambda/Dockerfile",
+    ):
+        assert Path(rel).is_file(), f"missing {rel}"
+    for env in ("hub-nonprod", "hub-prod", "deploy-endpoint"):
+        text = (ROOT / "envs" / env / "platform_lambda.tf").read_text()
+        assert "platform_lambda_uris" in text
+        assert "platform_ecr_registry" in text
+
+
+def test_lambda_modules_support_image_package_type():
+    for mod in ("governance", "promote", "api_gateway", "stage_analytics", "bu_endpoints"):
+        main = (ROOT / "modules" / mod / "main.tf").read_text()
+        assert "package_type" in main or "image_uri" in main, f"{mod} missing image support"
+
+
 def test_control_plane_docs_and_workflows():
     assert Path("docs/CONTROL_PLANE.md").is_file()
-    assert Path(".github/workflows/admin-run.yml").is_file()
-    assert Path(".github/workflows/model-promote.yml").is_file()
+    assert Path(".github/workflows/ml-lifecycle.yml").is_file()
+    assert Path(".github/workflows/platform-infra.yml").is_file()
     assert Path("infra/terraform/modules/stage_analytics/lambda/export_governance.py").is_file()

@@ -1,3 +1,6 @@
+# Target AWS account: ML-Prod (ML Central Plane).
+# Account inventory: docs/ACCOUNTS_AND_ROLES.md
+
 aws_region                = "us-east-1"
 name_prefix               = "mlp-hub-prod"
 vpc_id                    = "vpc-xxxxxxxx"
@@ -20,3 +23,8 @@ step_functions_role_arn        = "arn:aws:iam::ACCOUNT_ID:role/mlp-pipeline-trig
 promote_lambda_role_arn        = "arn:aws:iam::ACCOUNT_ID:role/mlp-promote-model"
 invoke_lambda_role_arn         = "arn:aws:iam::ACCOUNT_ID:role/mlp-invoke-endpoint"
 apigateway_cloudwatch_role_arn = "arn:aws:iam::ACCOUNT_ID:role/mlp-apigw-cloudwatch"
+
+# Platform Lambda container images (set by platform-infra CI before apply; empty = zip fallback)
+# platform_ecr_registry         = "123456789012.dkr.ecr.us-east-1.amazonaws.com"
+# platform_lambda_image_tag     = "abc123def456"
+# platform_lambdas_ecr_repository_name = "mlp-platform-lambdas"

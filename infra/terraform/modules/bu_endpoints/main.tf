@@ -32,12 +32,13 @@ module "api_gateway" {
   source   = "../api_gateway"
   for_each = var.enable_api_gateway ? local.active_bus : {}
 
-  name_prefix        = "${var.name_prefix}-${lower(each.key)}"
-  endpoint_name      = module.endpoint[each.key].endpoint_name
-  endpoint_arn       = module.endpoint[each.key].endpoint_arn
-  lambda_zip_path    = var.lambda_zip_path
-  lambda_source_hash = var.lambda_source_hash
-  lambda_role_arn    = var.invoke_lambda_role_arn
+  name_prefix               = "${var.name_prefix}-${lower(each.key)}"
+  endpoint_name             = module.endpoint[each.key].endpoint_name
+  endpoint_arn              = module.endpoint[each.key].endpoint_arn
+  lambda_zip_path           = var.lambda_zip_path
+  lambda_source_hash        = var.lambda_source_hash
+  invoke_endpoint_image_uri = var.invoke_endpoint_image_uri
+  lambda_role_arn           = var.invoke_lambda_role_arn
   enable_iam_auth    = var.enable_iam_auth
   tags = merge(var.tags, {
     BusinessUnit = each.key

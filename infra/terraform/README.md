@@ -73,7 +73,7 @@ terraform apply \
   -var="inference_role_arn=..."
 ```
 
-Or via GitHub Actions `model-deploy.yml` (reads SSM `/mlp-hub-nonprod/deploy/model_package_arn` written by governance Lambda on approval).
+Or via GitHub Actions `ml-lifecycle.yml` deploy job (reads SSM `/mlp-hub-nonprod/deploy/model_package_arn` written by governance Lambda on approval).
 
 ## Evaluation pipeline — two layers
 

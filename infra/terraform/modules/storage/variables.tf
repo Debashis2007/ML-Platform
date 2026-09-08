@@ -28,6 +28,12 @@ variable "ecr_repository_name" {
   default = "ml-platform-models"
 }
 
+variable "platform_lambdas_ecr_repository_name" {
+  type        = string
+  default     = "mlp-platform-lambdas"
+  description = "ECR repository for platform Lambda container images (CI build before CD apply)."
+}
+
 variable "kms_key_arn" {
   type        = string
   default     = null

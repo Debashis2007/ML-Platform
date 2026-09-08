@@ -132,20 +132,29 @@ resource "aws_cloudwatch_log_group" "export" {
 }
 
 data "archive_file" "export" {
+  count       = var.governance_export_image_uri == "" ? 1 : 0
   type        = "zip"
   source_file = "${path.module}/lambda/export_governance.py"
   output_path = "${path.module}/build/export_governance.zip"
 }
 
+locals {
+  export_use_image = var.governance_export_image_uri != ""
+}
+
 resource "aws_lambda_function" "export" {
-  function_name    = "${var.name_prefix}-governance-export"
-  role             = var.export_lambda_role_arn
-  handler          = "export_governance.handler"
-  runtime          = "python3.11"
-  timeout          = 120
-  memory_size      = 512
-  filename         = data.archive_file.export.output_path
-  source_code_hash = data.archive_file.export.output_base64sha256
+  function_name = "${var.name_prefix}-governance-export"
+  role          = var.export_lambda_role_arn
+  timeout       = 120
+  memory_size   = 512
+
+  package_type = local.export_use_image ? "Image" : "Zip"
+  image_uri    = local.export_use_image ? var.governance_export_image_uri : null
+
+  handler          = local.export_use_image ? null : "export_governance.handler"
+  runtime          = local.export_use_image ? null : "python3.11"
+  filename         = local.export_use_image ? null : data.archive_file.export[0].output_path
+  source_code_hash = local.export_use_image ? null : data.archive_file.export[0].output_base64sha256
 
   environment {
     variables = {

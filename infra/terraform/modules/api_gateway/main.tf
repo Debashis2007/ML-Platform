@@ -4,15 +4,23 @@ resource "aws_cloudwatch_log_group" "invoke" {
   tags              = var.tags
 }
 
+locals {
+  invoke_use_image = var.invoke_endpoint_image_uri != ""
+}
+
 resource "aws_lambda_function" "invoke" {
-  function_name    = "${var.name_prefix}-invoke-endpoint"
-  role             = var.lambda_role_arn
-  handler          = "handler.handler"
-  runtime          = "python3.11"
-  timeout          = 30
-  memory_size      = 256
-  filename         = var.lambda_zip_path
-  source_code_hash = var.lambda_source_hash
+  function_name = "${var.name_prefix}-invoke-endpoint"
+  role          = var.lambda_role_arn
+  timeout       = 30
+  memory_size   = 256
+
+  package_type = local.invoke_use_image ? "Image" : "Zip"
+  image_uri    = local.invoke_use_image ? var.invoke_endpoint_image_uri : null
+
+  handler          = local.invoke_use_image ? null : "handler.handler"
+  runtime          = local.invoke_use_image ? null : "python3.11"
+  filename         = local.invoke_use_image ? null : var.lambda_zip_path
+  source_code_hash = local.invoke_use_image ? null : var.lambda_source_hash
 
   environment {
     variables = {

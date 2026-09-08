@@ -3,11 +3,19 @@ variable "name_prefix" {
 }
 
 variable "lambda_zip_path" {
-  type = string
+  type    = string
+  default = ""
 }
 
 variable "lambda_source_hash" {
-  type = string
+  type    = string
+  default = ""
+}
+
+variable "promote_model_image_uri" {
+  type        = string
+  default     = ""
+  description = "ECR image URI from platform-infra CI. When set, deploys container Lambda instead of zip."
 }
 
 variable "lambda_role_arn" {

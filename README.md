@@ -9,7 +9,7 @@ The platform splits responsibilities into two layers that must be applied in ord
 | Layer | Code | Runs when | What it creates |
 |-------|------|-----------|-----------------|
 | **Platform (infra)** | `infra/terraform/` | Once per environment (manual or `platform-infra.yml`) | Shared AWS resources: S3 buckets, ECR, IAM roles, Model Registry, governance hooks, SSM parameters, Step Functions |
-| **Pipeline (application)** | `ml_platform/`, `examples/*/pipeline.yaml` | On every model code push (`model-ci.yml`) | SageMaker Pipeline definition and execution: Preprocess → Train → Evaluate → Condition → Register |
+| **Pipeline (application)** | `ml_platform/`, `examples/*/pipeline.yaml` | On every model code push (`ml-lifecycle.yml`) | SageMaker Pipeline definition and execution: Preprocess → Train → Evaluate → Condition → Register |
 
 Terraform does **not** define the training DAG step-by-step. It provisions the **hooks and shared services** the pipeline needs. Python (`ml_platform/build_pipeline.py`) reads `pipeline.yaml` and upserts the SageMaker Pipeline that runs on those resources.
 
@@ -28,7 +28,7 @@ Pass 2 — deploy-endpoint (per approved model)
 
 After Pass 1a, wire GitHub **secrets/vars** from Terraform outputs (OIDC roles, pipeline role, data URIs, bucket prefixes). CI cannot run until this bootstrap completes.
 
-### Training flow — Workflow A (`model-ci.yml`)
+### Training flow — `ml-lifecycle.yml` (train phase)
 
 Triggered on push to `main` when model or pipeline code changes.
 
@@ -47,7 +47,7 @@ Model Package in PendingManualApproval        (uses infra: registry module + S3 
 
 Pipeline parameters (`DataUri`, `OutputPrefix`, `ImageUri`) come from GitHub vars and land in S3 paths that Terraform created under `modules/evaluation-pipeline/` and `modules/storage/`.
 
-### Approval and deploy — governance + Workflow B
+### Approval and deploy — governance + `ml-lifecycle.yml` (promote · deploy)
 
 When a Senior DS approves the model package in SageMaker Model Registry:
 
@@ -58,8 +58,9 @@ Registry status → Approved
        → DynamoDB audit record
        → SSM /deploy/model_package_arn
        → EventBridge "Model Approved" event
-  → model-deploy.yml (manual or repository_dispatch)
-  → terraform apply in deploy-endpoint/
+  → ml-lifecycle.yml (repository_dispatch model-approved or workflow_dispatch release/promote-only/deploy-only)
+  → promote Lambda → Prod registry (promote job)
+  → terraform apply in deploy-endpoint/ (deploy job)
        → SageMaker endpoint from approved package
        → API Gateway POST /invocations
        → CloudWatch alarms → SNS
@@ -81,7 +82,7 @@ Workflow B reads the approved `model_package_arn` from workflow input or the SSM
 
 Each new model repo copies `templates/model-project/`, adds a `pipeline.yaml`, and reuses the same infra factory. Only Pass 2 (`deploy-endpoint`) is repeated per approved model version.
 
-See `docs/ARCHITECTURE_MAP.md`, `docs/CONTROL_PLANE.md`, and `docs/OPERATIONS_AND_DEPLOYMENT.md` (env→env deploy, runners, pipelines, first model, maintenance) for PPT zone-to-path mapping and `infra/terraform/README.md` for module-level apply order.
+See `docs/ACCOUNTS_AND_ROLES.md` (accounts + human/service roles), `docs/ARCHITECTURE_MAP.md`, `docs/CONTROL_PLANE.md`, and `docs/OPERATIONS_AND_DEPLOYMENT.md` (env→env deploy, runners, pipelines, first model, maintenance) for PPT zone-to-path mapping and `infra/terraform/README.md` for module-level apply order.
 
 ## Repository layout
 
@@ -95,7 +96,7 @@ See `docs/ARCHITECTURE_MAP.md`, `docs/CONTROL_PLANE.md`, and `docs/OPERATIONS_AN
 | `examples/credit-risk/` | Lighthouse full pipeline (Train→Evaluate→Register) |
 | `templates/model-project/` | GitHub template for new model repos |
 | `lambdas/` | Governance, promote, invoke, GitHub dispatch |
-| `.github/workflows/` | Admin-Run, CI, promote, deploy, platform-infra |
+| `.github/workflows/` | `ml-lifecycle.yml` (train · promote · deploy), `platform-infra.yml` (Terraform · deploy-bu) |
 | `source/` | Reference notebooks for validation |
 
 ## Infrastructure
@@ -130,7 +131,7 @@ cd infra/terraform/envs/hub-prod
 terraform init && terraform apply
 ```
 
-Use workflow **Admin Run** (`.github/workflows/admin-run.yml`) for plan/apply/promote/deploy-bu.
+Use workflow **Platform infra** (`.github/workflows/platform-infra.yml`) for plan/apply/deploy-bu. By default it **builds platform Lambda container images → ECR**, then runs Terraform CD with `TF_VAR_platform_ecr_registry` and `TF_VAR_platform_lambda_image_tag` (set `skip_image_build=true` for zip-only local bootstrap). Model lifecycle uses **ML lifecycle** (`.github/workflows/ml-lifecycle.yml`).
 
 ## Quick start — pipeline factory
 
@@ -142,7 +143,7 @@ python -c "from ml_platform.config import PipelineConfig; print(PipelineConfig.l
 python ml_platform/build_pipeline.py --config examples/credit-risk/pipeline.yaml
 ```
 
-After infra bootstrap, CI runs the same upsert + start sequence automatically via `model-ci.yml`.
+After infra bootstrap, CI runs the same upsert + start sequence automatically via `ml-lifecycle.yml`.
 
 ## Serving contract
 

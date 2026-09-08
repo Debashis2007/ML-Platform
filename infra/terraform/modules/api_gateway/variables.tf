@@ -14,11 +14,19 @@ variable "endpoint_arn" {
 
 variable "lambda_zip_path" {
   type        = string
-  description = "Path to invoke_endpoint Lambda zip."
+  default     = ""
+  description = "Path to invoke_endpoint Lambda zip (zip fallback when image URI empty)."
 }
 
 variable "lambda_source_hash" {
-  type = string
+  type    = string
+  default = ""
+}
+
+variable "invoke_endpoint_image_uri" {
+  type        = string
+  default     = ""
+  description = "ECR image URI from platform-infra CI. When set, deploys container Lambda instead of zip."
 }
 
 variable "lambda_role_arn" {
