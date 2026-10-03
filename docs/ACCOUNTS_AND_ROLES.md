@@ -14,10 +14,7 @@ Extended role catalog is maintained outside this repository.
 |--------------|-----|----------------|----------------------|---------|
 | **Control-NonProd** (Launchpad Non-Prod) | nonprod | `848973819860` | **Yes — Wave-1 primary** | ML hub in Control: train, registry, governance, Non-Prod endpoints |
 | **Control-Prod** (Launchpad Prod) | prod | `762794225431` | **Yes — before Prod milestone** | ML hub in Control: Prod registry, promote, API GW, endpoints |
-| **BU1-{env}** | nonprod / prod | `_TBD_` | No (Wave-1 invoke only) | BU applications consume ML |
-| **BU2-{env}** | nonprod / prod | `_TBD_` | No (Wave-1 invoke only) | BU applications consume ML |
-| **BU3-{env}** | nonprod / prod | `_TBD_` | No (Wave-1 invoke only) | BU applications consume ML |
-| **BU4-{env}** | nonprod / prod | `_TBD_` | No (Wave-1 invoke only) | BU applications consume ML |
+| **BU-{name}-{env}** | nonprod / prod | `_TBD_` | No (Wave-1 invoke only) | BU applications consume ML |
 | **External data source** | varies | `_TBD_` | No (cross-account read) | Training data for `MLP_TRAIN_DATA_URI` |
 | **Shared-network** | — | `_TBD_` | No | TGW, PrivateLink, DNS for Control VPC |
 | **Lab** | — | `_TBD_` | No | DS experimentation (optional) |
