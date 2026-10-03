@@ -21,6 +21,12 @@ variable "export_lambda_role_arn" {
   description = "Client-managed IAM role ARN for governance export Lambda."
 }
 
+variable "governance_export_image_uri" {
+  type        = string
+  default     = ""
+  description = "ECR image URI from platform-infra CI. When set, deploys container Lambda instead of zip."
+}
+
 variable "spill_bucket_name" {
   type        = string
   description = "Globally unique S3 bucket for Athena spill + governance exports."

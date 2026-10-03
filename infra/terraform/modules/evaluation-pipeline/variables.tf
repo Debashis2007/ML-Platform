@@ -4,7 +4,7 @@ variable "name_prefix" {
 
 variable "model_name" {
   type        = string
-  description = "Model / pipeline name (matches pipeline.yaml model field)."
+  description = "Model / pipeline name (matches model.yaml model.id)."
 }
 
 variable "pipeline_role_arn" {

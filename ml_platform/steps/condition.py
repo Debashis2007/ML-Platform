@@ -1,4 +1,4 @@
-"""Metric condition gate (CheckMetric ConditionStep)."""
+"""Metric condition gate (CheckMetric ConditionStep) — every threshold must pass."""
 
 from __future__ import annotations
 
@@ -8,27 +8,30 @@ from sagemaker.workflow.functions import JsonGet
 from sagemaker.workflow.properties import PropertyFile
 from sagemaker.workflow.steps import ProcessingStep
 
-from ml_platform.config import PipelineConfig
+from ml_platform.config import ModelConfig
 
 
 def build_condition_step(
-    cfg: PipelineConfig,
+    cfg: ModelConfig,
     *,
     evaluate_step: ProcessingStep,
     evaluation_report: PropertyFile,
-    register_step: ProcessingStep,
+    publish_step: ProcessingStep,
 ) -> ConditionStep:
-    condition = ConditionGreaterThanOrEqualTo(
-        left=JsonGet(
-            step_name=evaluate_step.name,
-            property_file=evaluation_report,
-            json_path=f"$.{cfg.threshold_metric}",
-        ),
-        right=cfg.threshold_min,
-    )
+    conditions = [
+        ConditionGreaterThanOrEqualTo(
+            left=JsonGet(
+                step_name=evaluate_step.name,
+                property_file=evaluation_report,
+                json_path=f"$.{metric}",
+            ),
+            right=minimum,
+        )
+        for metric, minimum in cfg.thresholds.items()
+    ]
     return ConditionStep(
         name="CheckMetric",
-        conditions=[condition],
-        if_steps=[register_step],
+        conditions=conditions,
+        if_steps=[publish_step],
         else_steps=[],
     )

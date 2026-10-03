@@ -1,4 +1,6 @@
+# Rollback alarms (5xx, latency) are owned by the endpoint module; these are optional extras.
 resource "aws_cloudwatch_metric_alarm" "endpoint_latency" {
+  count               = var.create_endpoint_alarms ? 1 : 0
   alarm_name          = "${var.name_prefix}-${var.endpoint_name}-latency"
   comparison_operator = "GreaterThanThreshold"
   evaluation_periods  = 3
@@ -19,6 +21,7 @@ resource "aws_cloudwatch_metric_alarm" "endpoint_latency" {
 }
 
 resource "aws_cloudwatch_metric_alarm" "endpoint_errors" {
+  count               = var.create_endpoint_alarms ? 1 : 0
   alarm_name          = "${var.name_prefix}-${var.endpoint_name}-5xx"
   comparison_operator = "GreaterThanThreshold"
   evaluation_periods  = 2
@@ -68,8 +71,8 @@ resource "aws_sagemaker_data_quality_job_definition" "this" {
   data_quality_job_output_config {
     monitoring_outputs {
       s3_output {
-        s3_uri        = var.monitoring_output_s3_uri
-        local_path    = "/opt/ml/processing/output"
+        s3_uri         = var.monitoring_output_s3_uri
+        local_path     = "/opt/ml/processing/output"
         s3_upload_mode = "EndOfJob"
       }
     }
@@ -102,6 +105,7 @@ resource "aws_sagemaker_monitoring_schedule" "data_quality" {
 
   monitoring_schedule_config {
     monitoring_job_definition_name = aws_sagemaker_data_quality_job_definition.this[0].name
+    monitoring_type                = "DataQuality"
     schedule_config {
       schedule_expression = var.schedule_expression
     }

@@ -7,12 +7,12 @@ from sagemaker.workflow.functions import Join
 from sagemaker.workflow.parameters import ParameterString
 from sagemaker.workflow.steps import ProcessingStep
 
-from ml_platform.config import PipelineConfig
-from ml_platform.steps.common import script_path
+from ml_platform.config import ModelConfig
+from ml_platform.steps.common import resource_tags, script_path
 
 
 def build_preprocess_step(
-    cfg: PipelineConfig,
+    cfg: ModelConfig,
     *,
     role_arn: str | None,
     image_uri: ParameterString,
@@ -26,7 +26,8 @@ def build_preprocess_step(
         instance_type=instance_type,
         instance_count=1,
         role=role_arn,
-        env={"TARGET_COLUMN": cfg.target_column, "MODEL_NAME": cfg.model_name},
+        env={"TARGET_COLUMN": cfg.target_column, "MODEL_NAME": cfg.model_id},
+        tags=resource_tags(cfg.tags()),
     )
     return ProcessingStep(
         name="Preprocess",
@@ -44,6 +45,6 @@ def build_preprocess_step(
                 destination=Join(on="/", values=[output_prefix, "processed", "validation"]),
             ),
         ],
-        code=script_path(cfg.model_name, "preprocess.py"),
+        code=script_path(cfg.model_id, "preprocess.py"),
         job_arguments=["--target-column", cfg.target_column],
     )

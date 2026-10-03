@@ -14,7 +14,8 @@ infra/terraform/
     governance/           # EventBridge, Lambda, DynamoDB (Lambda role ARN input)
     secrets/              # Secrets Manager placeholders (DEV zone)
     evaluation-pipeline/  # SSM + S3 paths for Train→Evaluate→Register pipeline
-    step_functions/       # Pipeline and deploy trigger state machines (SFN role ARN input)
+    management_api/       # Private approval API (Okta TOKEN authorizer, WAF hook)
+    platform_function/    # Reusable platform Lambda (container image or zip)
     sns/                  # Alert topic for Model Monitor alarms
     api_gateway/          # REST API → Lambda → SageMaker endpoint (+ WAF)
     cloudwatch/           # Pipeline + endpoint dashboards
@@ -73,7 +74,7 @@ terraform apply \
   -var="inference_role_arn=..."
 ```
 
-Or via GitHub Actions `model-deploy.yml` (reads SSM `/mlp-hub-nonprod/deploy/model_package_arn` written by governance Lambda on approval).
+Or via GitHub Actions `ml-lifecycle.yml` deploy job (reads SSM `/mlp-hub-nonprod/deploy/model_package_arn` written by governance Lambda on approval).
 
 ## Evaluation pipeline — two layers
 
@@ -86,7 +87,7 @@ CI upserts and starts the pipeline (Workflow A):
 
 ```bash
 python ml_platform/build_pipeline.py \
-  --config examples/credit-risk/pipeline.yaml \
+  --config examples/credit-risk/model.yaml \
   --upsert --role-arn "$PIPELINE_ROLE_ARN"
 
 python ml_platform/run_pipeline.py \

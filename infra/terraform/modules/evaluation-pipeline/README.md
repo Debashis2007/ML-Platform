@@ -42,6 +42,6 @@ After apply, run Workflow A:
 
 ```bash
 python ml_platform/build_pipeline.py \
-  --config examples/credit-risk/pipeline.yaml \
+  --config examples/credit-risk/model.yaml \
   --upsert --role-arn $(terraform output -raw pipeline_role_arn)
 ```

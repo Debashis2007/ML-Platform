@@ -3,11 +3,19 @@ variable "name_prefix" {
 }
 
 variable "lambda_zip_path" {
-  type = string
+  type    = string
+  default = ""
 }
 
 variable "lambda_source_hash" {
-  type = string
+  type    = string
+  default = ""
+}
+
+variable "promote_model_image_uri" {
+  type        = string
+  default     = ""
+  description = "ECR image URI from platform-infra CI. When set, deploys container Lambda instead of zip."
 }
 
 variable "lambda_role_arn" {
@@ -24,16 +32,6 @@ variable "deploy_parameter_prefix" {
   default = ""
 }
 
-variable "target_approval_status" {
-  type    = string
-  default = "Approved"
-}
-
-variable "business_unit" {
-  type    = string
-  default = ""
-}
-
 variable "kms_key_arn" {
   type    = string
   default = null
@@ -41,20 +39,19 @@ variable "kms_key_arn" {
 
 variable "enable_event_trigger" {
   type        = bool
-  default     = true
-  description = "Subscribe to ml.platform.governance Model Approved events."
+  default     = false
+  description = "Also accept promotion requests from EventBridge (the workflow invokes directly by default)."
 }
 
-variable "model_life_cycle_stage" {
+variable "decision_log_table_name" {
   type        = string
-  default     = "Production"
-  description = "Model Registry staging construct stage set on promoted packages."
+  description = "Prod decision log table (PROMOTION_REQUESTED records)."
 }
 
-variable "model_life_cycle_status" {
+variable "source_registry_read_role_arn" {
   type        = string
-  default     = "Approved"
-  description = "Model Registry staging construct status set on promoted packages."
+  default     = ""
+  description = "Read-only role in the NonProd control plane for DescribeModelPackage."
 }
 
 variable "source_account_ids" {

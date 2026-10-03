@@ -14,8 +14,12 @@ output "sns_alerts_topic_arn" {
   value = module.sns.alerts_topic_arn
 }
 
-output "waf_web_acl_arn" {
-  value = try(module.waf[0].web_acl_arn, null)
+output "endpoint_config_name" {
+  value = module.endpoint.endpoint_config_name
+}
+
+output "rollback_alarm_names" {
+  value = module.endpoint.rollback_alarm_names
 }
 
 output "monitoring_schedule_name" {

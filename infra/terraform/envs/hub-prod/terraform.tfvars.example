@@ -1,3 +1,7 @@
+# Target AWS account: Control-Prod (Launchpad Control Plane).
+# Account ID: 762794225431 — see docs/ACCOUNTS_AND_ROLES.md
+# Account inventory: docs/ACCOUNTS_AND_ROLES.md
+
 aws_region                = "us-east-1"
 name_prefix               = "mlp-hub-prod"
 vpc_id                    = "vpc-xxxxxxxx"
@@ -7,16 +11,29 @@ prod_data_bucket_name     = "mlp-prod-model-data"
 dev_artifacts_bucket_name = "mlp-prod-build-artifacts"
 artifacts_bucket_name     = "mlp-prod-model-artifacts"
 athena_spill_bucket_name  = "mlp-prod-athena-spill"
-endpoint_name             = "credit-risk"
 model_package_group_name  = "ModelCreditRisk"
 
 # Client-managed IAM role ARNs (see docs/CLIENT_MANAGED_IAM_ROLES.md)
-pipeline_role_arn              = "arn:aws:iam::ACCOUNT_ID:role/mlp-sagemaker-pipeline"
-training_role_arn              = "arn:aws:iam::ACCOUNT_ID:role/mlp-sagemaker-training"
-inference_role_arn             = "arn:aws:iam::ACCOUNT_ID:role/mlp-sagemaker-inference"
-governance_lambda_role_arn     = "arn:aws:iam::ACCOUNT_ID:role/mlp-governance-lambda"
-stage_export_lambda_role_arn   = "arn:aws:iam::ACCOUNT_ID:role/mlp-governance-export"
-step_functions_role_arn        = "arn:aws:iam::ACCOUNT_ID:role/mlp-pipeline-trigger"
-promote_lambda_role_arn        = "arn:aws:iam::ACCOUNT_ID:role/mlp-promote-model"
-invoke_lambda_role_arn         = "arn:aws:iam::ACCOUNT_ID:role/mlp-invoke-endpoint"
-apigateway_cloudwatch_role_arn = "arn:aws:iam::ACCOUNT_ID:role/mlp-apigw-cloudwatch"
+pipeline_role_arn              = "arn:aws:iam::762794225431:role/mlp-sagemaker-pipeline"
+training_role_arn              = "arn:aws:iam::762794225431:role/mlp-sagemaker-training"
+inference_role_arn             = "arn:aws:iam::762794225431:role/mlp-sagemaker-inference"
+governance_lambda_role_arn     = "arn:aws:iam::762794225431:role/mlp-governance-lambda"
+stage_export_lambda_role_arn   = "arn:aws:iam::762794225431:role/mlp-governance-export"
+promote_lambda_role_arn        = "arn:aws:iam::762794225431:role/mlp-promote-model"
+registration_lambda_role_arn   = "arn:aws:iam::762794225431:role/mlp-register-candidate"
+approval_lambda_role_arn       = "arn:aws:iam::762794225431:role/mlp-approval-api"
+authorizer_lambda_role_arn     = "arn:aws:iam::762794225431:role/mlp-okta-authorizer"
+source_registry_read_role_arn  = "arn:aws:iam::848973819860:role/mlp-registry-read"
+
+# Design v7
+okta_issuer            = "https://REPLACE.okta.com/oauth2/REPLACE_SERVER_ID"
+okta_audience          = "api://ml-platform-management"
+model_ids              = ["credit-risk"]
+deployment_account_ids = ["259822548263"] # BU Prod (LIVE)
+# waf_web_acl_arn      = ""
+# break_glass_principal_arns = ["arn:aws:iam::762794225431:role/REPLACE_BREAK_GLASS"]
+
+# Platform Lambda container images (set by platform-infra CI before apply; empty = zip fallback)
+# platform_ecr_registry         = "123456789012.dkr.ecr.us-east-1.amazonaws.com"
+# platform_lambda_image_tag     = "abc123def456"
+# platform_lambdas_ecr_repository_name = "mlp-platform-lambdas"

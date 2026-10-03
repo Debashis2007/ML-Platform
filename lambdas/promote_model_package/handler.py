@@ -1,10 +1,20 @@
-"""Promote an approved Non-Prod model package into the Prod Model Registry."""
+"""Record a NonProd → Prod promotion request (design v7: copy by digest, retrain in Prod).
+
+This Lambda never creates or approves a Prod package. It verifies that:
+  * the NonProd package is Approved through the management API (approval_id present),
+  * the image digest has already been copied into the Prod ECR repository,
+then records PROMOTION_REQUESTED and emits an event. The workflow starts the Prod
+pipeline with LineageSourcePackageArn; the Prod registration Lambda creates a
+PendingManualApproval package that a Prod senior data scientist approves.
+"""
 
 from __future__ import annotations
 
 import json
 import logging
 import os
+import uuid
+from datetime import datetime, timezone
 from typing import Any
 
 import boto3
@@ -15,30 +25,47 @@ logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
 _CONFIG = Config(retries={"max_attempts": 8, "mode": "adaptive"})
-_SM = None
-_SSM = None
-_EVENTS = None
+_CLIENTS: dict[str, Any] = {}
+
+
+def _client(name: str) -> Any:
+    if name not in _CLIENTS:
+        _CLIENTS[name] = boto3.client(name, config=_CONFIG)
+    return _CLIENTS[name]
 
 
 def _sm():
-    global _SM
-    if _SM is None:
-        _SM = boto3.client("sagemaker", config=_CONFIG)
-    return _SM
+    return _client("sagemaker")
 
 
-def _ssm():
-    global _SSM
-    if _SSM is None:
-        _SSM = boto3.client("ssm", config=_CONFIG)
-    return _SSM
+def _ecr():
+    return _client("ecr")
 
 
 def _events():
-    global _EVENTS
-    if _EVENTS is None:
-        _EVENTS = boto3.client("events", config=_CONFIG)
-    return _EVENTS
+    return _client("events")
+
+
+def _ddb():
+    if "ddb" not in _CLIENTS:
+        _CLIENTS["ddb"] = boto3.resource("dynamodb", config=_CONFIG)
+    return _CLIENTS["ddb"]
+
+
+def _source_sm():
+    """SageMaker client for the NonProd registry (read-only role when cross-account)."""
+    role_arn = os.environ.get("SOURCE_REGISTRY_READ_ROLE_ARN", "")
+    if not role_arn:
+        return _sm()
+    creds = _client("sts").assume_role(RoleArn=role_arn, RoleSessionName="ml-promote-read",
+                                       DurationSeconds=900)["Credentials"]
+    return boto3.client(
+        "sagemaker",
+        config=_CONFIG,
+        aws_access_key_id=creds["AccessKeyId"],
+        aws_secret_access_key=creds["SecretAccessKey"],
+        aws_session_token=creds["SessionToken"],
+    )
 
 
 def _detail(event: dict[str, Any]) -> dict[str, Any]:
@@ -48,104 +75,72 @@ def _detail(event: dict[str, Any]) -> dict[str, Any]:
     return detail
 
 
-def lambda_handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
-    """Copy Non-Prod approved package into Prod package group and signal deploy.
+def _split_digest_uri(uri: str) -> tuple[str, str, str]:
+    """123.dkr.ecr.region.amazonaws.com/repo@sha256:abc -> (registry_id, repo, digest)."""
+    if "@sha256:" not in uri:
+        raise ValueError("prod_image_uri must be pinned by digest (repo@sha256:...)")
+    host_repo, digest = uri.split("@", 1)
+    host, _, repo = host_repo.partition("/")
+    return host.split(".", 1)[0], repo, digest
 
-    Expected env:
-      TARGET_MODEL_PACKAGE_GROUP
-      DEPLOY_PARAMETER_PREFIX
-      TARGET_APPROVAL_STATUS (default Approved)
-    Event detail must include model_package_arn (source).
-    """
+
+def lambda_handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
     detail = _detail(event)
-    source_arn = detail.get("model_package_arn") or detail.get("ModelPackageArn") or event.get("source_model_package_arn")
+    source_arn = (detail.get("source_model_package_arn") or detail.get("model_package_arn")
+                  or detail.get("ModelPackageArn"))
     if not source_arn:
         raise ValueError("source model_package_arn is required")
+    prod_image_uri = str(detail.get("prod_image_uri") or "")
+    registry_id, repo, digest = _split_digest_uri(prod_image_uri)
 
-    target_group = os.environ["TARGET_MODEL_PACKAGE_GROUP"]
-    deploy_prefix = os.environ.get("DEPLOY_PARAMETER_PREFIX", "/mlp/deploy").rstrip("/")
-    approval = os.environ.get("TARGET_APPROVAL_STATUS", "Approved")
-    business_unit = (
-        detail.get("business_unit")
-        or event.get("business_unit")
-        or os.environ.get("BUSINESS_UNIT", "")
-    )
-    life_stage = os.environ.get("MODEL_LIFE_CYCLE_STAGE", "Production")
-    life_status = os.environ.get("MODEL_LIFE_CYCLE_STATUS", "Approved")
-
-    sm = _sm()
-    source = sm.describe_model_package(ModelPackageName=source_arn)
-    inference = source.get("InferenceSpecification")
-    if not inference:
-        raise ValueError(f"Source package has no InferenceSpecification: {source_arn}")
-
-    request: dict[str, Any] = {
-        "ModelPackageGroupName": target_group,
-        "ModelPackageDescription": (
-            f"Promoted from {source_arn}"
-            + (f" for BU {business_unit}" if business_unit else "")
-        ),
-        "ModelApprovalStatus": approval,
-        "ModelLifeCycle": {
-            "Stage": life_stage,
-            "StageStatus": life_status,
-            "StageDescription": f"Promoted from {source_arn}",
-        },
-        "InferenceSpecification": inference,
-    }
-    if source.get("CustomerMetadataProperties"):
-        meta = dict(source["CustomerMetadataProperties"])
-        meta["promoted_from"] = source_arn
-        if business_unit:
-            meta["business_unit"] = business_unit
-        request["CustomerMetadataProperties"] = meta
-    elif business_unit:
-        request["CustomerMetadataProperties"] = {
-            "promoted_from": source_arn,
-            "business_unit": business_unit,
-        }
+    source = _source_sm().describe_model_package(ModelPackageName=source_arn)
+    if source.get("ModelApprovalStatus") != "Approved":
+        raise ValueError(f"source package is {source.get('ModelApprovalStatus')}, not Approved")
+    meta = source.get("CustomerMetadataProperties") or {}
+    if not meta.get("approval_id"):
+        raise ValueError("source package was not approved through the management API")
+    source_image = source["InferenceSpecification"]["Containers"][0]["Image"]
+    if source_image.split("@", 1)[-1] != digest:
+        raise ValueError("prod_image_uri digest differs from the NonProd approved image digest")
 
     try:
-        resp = sm.create_model_package(**request)
+        _ecr().describe_images(registryId=registry_id, repositoryName=repo, imageIds=[{"imageDigest": digest}])
     except ClientError as exc:
-        logger.error("create_model_package failed: %s", exc)
+        if exc.response.get("Error", {}).get("Code") in {"ImageNotFoundException", "RepositoryNotFoundException"}:
+            raise ValueError(f"digest {digest} not present in Prod ECR {repo}; copy it by digest first") from exc
         raise
 
-    promoted_arn = resp["ModelPackageArn"]
-    ssm_names = [f"{deploy_prefix}/model_package_arn", f"{deploy_prefix}/{target_group}/model_package_arn"]
-    if business_unit:
-        ssm_names.append(f"{deploy_prefix}/{business_unit}/model_package_arn")
+    model_key = f"{meta.get('tenant_id', 'unknown')}#{meta.get('model_id', 'unknown')}"
+    request_id = uuid.uuid4().hex
+    _ddb().Table(os.environ["DECISION_LOG_TABLE"]).put_item(Item={
+        "pk": model_key,
+        "sk": f"{datetime.now(timezone.utc).isoformat()}#{request_id}",
+        "action": "PROMOTION_REQUESTED",
+        "actor": str(detail.get("requested_by") or "promote_model_package"),
+        "source_model_package_arn": source_arn,
+        "source_approval_id": meta["approval_id"],
+        "prod_image_uri": prod_image_uri,
+        "source_commit": meta.get("source_commit", ""),
+    })
 
-    for name in ssm_names:
-        _ssm().put_parameter(Name=name, Value=promoted_arn, Type="String", Overwrite=True)
-
-    put = _events().put_events(
-        Entries=[
-            {
-                "Source": "ml.platform.promote",
-                "DetailType": "Model Promoted",
-                "Detail": json.dumps(
-                    {
-                        "source_model_package_arn": source_arn,
-                        "model_package_arn": promoted_arn,
-                        "model_package_group": target_group,
-                        "business_unit": business_unit,
-                        "approval_status": approval,
-                    }
-                ),
-            }
-        ]
-    )
+    body = {
+        "promotion_request_id": request_id,
+        "source_model_package_arn": source_arn,
+        "prod_image_uri": prod_image_uri,
+        "target_model_package_group": os.environ.get("TARGET_MODEL_PACKAGE_GROUP", ""),
+        "tenant_id": meta.get("tenant_id"),
+        "model_id": meta.get("model_id"),
+        "source_commit": meta.get("source_commit"),
+    }
+    put = _events().put_events(Entries=[{
+        "Source": "ml.platform.promote",
+        "DetailType": "Model Promotion Requested",
+        "Detail": json.dumps(body),
+    }])
     if put.get("FailedEntryCount", 0):
         raise RuntimeError(f"EventBridge FailedEntryCount={put.get('FailedEntryCount')}")
 
-    body = {
-        "source_model_package_arn": source_arn,
-        "promoted_model_package_arn": promoted_arn,
-        "model_package_group": target_group,
-        "business_unit": business_unit,
-    }
-    logger.info("model_promoted %s", json.dumps(body))
+    logger.info("promotion_requested %s", json.dumps(body))
     return {"statusCode": 200, "body": json.dumps(body)}
 
 

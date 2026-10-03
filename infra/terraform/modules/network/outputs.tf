@@ -13,8 +13,13 @@ output "sagemaker_security_group_id" {
 output "vpc_endpoint_ids" {
   value = var.enable_vpc_endpoints ? merge(
     { s3 = aws_vpc_endpoint.s3[0].id },
+    local.enable_dynamodb_gateway ? { dynamodb = aws_vpc_endpoint.dynamodb[0].id } : {},
     { for k, ep in aws_vpc_endpoint.interface : k => ep.id }
   ) : {}
+}
+
+output "execute_api_vpc_endpoint_id" {
+  value = try(aws_vpc_endpoint.interface["execute-api"].id, null)
 }
 
 output "vpc_endpoints_security_group_id" {

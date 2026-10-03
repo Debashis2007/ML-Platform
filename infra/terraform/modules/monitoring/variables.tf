@@ -6,6 +6,12 @@ variable "endpoint_name" {
   type = string
 }
 
+variable "create_endpoint_alarms" {
+  type        = bool
+  default     = false
+  description = "Duplicate latency/5xx alarms; off by default because the endpoint module owns rollback alarms."
+}
+
 variable "latency_threshold_ms" {
   type    = number
   default = 500

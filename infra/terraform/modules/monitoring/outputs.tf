@@ -1,9 +1,9 @@
 output "latency_alarm_arn" {
-  value = aws_cloudwatch_metric_alarm.endpoint_latency.arn
+  value = try(aws_cloudwatch_metric_alarm.endpoint_latency[0].arn, null)
 }
 
 output "error_alarm_arn" {
-  value = aws_cloudwatch_metric_alarm.endpoint_errors.arn
+  value = try(aws_cloudwatch_metric_alarm.endpoint_errors[0].arn, null)
 }
 
 output "monitoring_schedule_name" {

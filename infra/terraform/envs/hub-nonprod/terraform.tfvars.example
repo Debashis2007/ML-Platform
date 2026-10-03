@@ -1,22 +1,40 @@
 # Copy to terraform.tfvars and fill in account-specific values.
+# Target AWS account: Control-NonProd (Launchpad Control Plane — Wave-1).
+# Account ID: 848973819860 — see docs/ACCOUNTS_AND_ROLES.md
 
 aws_region                = "us-east-1"
 name_prefix               = "mlp-hub-nonprod"
 vpc_id                    = "vpc-xxxxxxxx"
 subnet_ids                = ["subnet-aaa", "subnet-bbb"]
-data_bucket_name          = "ml-platform-data-ACCOUNT_ID"
-dev_artifacts_bucket_name = "ml-platform-dev-artifacts-ACCOUNT_ID"
-artifacts_bucket_name     = "ml-platform-model-artifacts-ACCOUNT_ID"
+data_bucket_name          = "ml-platform-data-848973819860"
+dev_artifacts_bucket_name = "ml-platform-dev-artifacts-848973819860"
+artifacts_bucket_name     = "ml-platform-model-artifacts-848973819860"
 ecr_repository_name       = "ml-platform-models"
 model_package_group_name  = "ModelCreditRisk"
 spoke_account_ids         = ["111111111111", "222222222222"]
-athena_spill_bucket_name  = "ml-platform-athena-spill-ACCOUNT_ID"
+athena_spill_bucket_name  = "ml-platform-athena-spill-848973819860"
 
-# Client-managed IAM role ARNs (see docs/CLIENT_MANAGED_IAM_ROLES.md)
-pipeline_role_arn            = "arn:aws:iam::ACCOUNT_ID:role/mlp-sagemaker-pipeline"
-training_role_arn            = "arn:aws:iam::ACCOUNT_ID:role/mlp-sagemaker-training"
-inference_role_arn           = "arn:aws:iam::ACCOUNT_ID:role/mlp-sagemaker-inference"
-governance_lambda_role_arn   = "arn:aws:iam::ACCOUNT_ID:role/mlp-governance-lambda"
-stage_export_lambda_role_arn = "arn:aws:iam::ACCOUNT_ID:role/mlp-governance-export"
-step_functions_role_arn      = "arn:aws:iam::ACCOUNT_ID:role/mlp-pipeline-trigger"
-# github_dispatch_lambda_role_arn = "arn:aws:iam::ACCOUNT_ID:role/mlp-github-dispatch"
+# Client-managed IAM role ARNs in Control-NonProd (see docs/CLIENT_MANAGED_IAM_ROLES.md)
+pipeline_role_arn            = "arn:aws:iam::848973819860:role/mlp-sagemaker-pipeline"
+training_role_arn            = "arn:aws:iam::848973819860:role/mlp-sagemaker-training"
+inference_role_arn           = "arn:aws:iam::848973819860:role/mlp-sagemaker-inference"
+governance_lambda_role_arn   = "arn:aws:iam::848973819860:role/mlp-governance-lambda"
+stage_export_lambda_role_arn = "arn:aws:iam::848973819860:role/mlp-governance-export"
+registration_lambda_role_arn = "arn:aws:iam::848973819860:role/mlp-register-candidate"
+approval_lambda_role_arn     = "arn:aws:iam::848973819860:role/mlp-approval-api"
+authorizer_lambda_role_arn   = "arn:aws:iam::848973819860:role/mlp-okta-authorizer"
+
+# Design v7
+okta_issuer            = "https://REPLACE.okta.com/oauth2/REPLACE_SERVER_ID"
+okta_audience          = "api://ml-platform-management"
+model_ids              = ["credit-risk"]
+deployment_account_ids = ["546386837851", "259822548263"] # BU NonProd (QA), BU Prod (LIVE)
+training_account_ids   = []                               # POC: training runs in this control-plane account
+# waf_web_acl_arn      = ""                                # replaceable protection hook
+# break_glass_principal_arns = ["arn:aws:iam::848973819860:role/REPLACE_BREAK_GLASS"]
+
+# Platform Lambda container images (set by platform-infra CI before apply; empty = zip fallback)
+# platform_ecr_registry         = "123456789012.dkr.ecr.us-east-1.amazonaws.com"
+# platform_lambda_image_tag     = "abc123def456"
+# platform_lambdas_ecr_repository_name = "mlp-platform-lambdas"
+

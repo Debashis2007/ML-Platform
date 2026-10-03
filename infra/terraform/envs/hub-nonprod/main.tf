@@ -14,6 +14,14 @@ terraform {
 
 provider "aws" {
   region = var.aws_region
+
+  default_tags {
+    tags = {
+      bu      = var.bu
+      project = var.project
+      version = var.platform_version
+    }
+  }
 }
 
 data "archive_file" "capture_approval_lambda" {
@@ -43,6 +51,7 @@ module "network" {
   name_prefix          = var.name_prefix
   vpc_id               = var.vpc_id
   subnet_ids           = var.subnet_ids
+  plane                = "control_plane"
   enable_vpc_endpoints = var.enable_vpc_endpoints
   tags                 = var.tags
 }
@@ -50,13 +59,17 @@ module "network" {
 module "storage" {
   source = "../../modules/storage"
 
-  name_prefix               = var.name_prefix
-  data_bucket_name          = var.data_bucket_name
-  dev_artifacts_bucket_name = var.dev_artifacts_bucket_name
-  artifacts_bucket_name     = var.artifacts_bucket_name
-  ecr_repository_name       = var.ecr_repository_name
-  kms_key_arn               = module.kms.key_arn
-  tags                      = var.tags
+  name_prefix                          = var.name_prefix
+  data_bucket_name                     = var.data_bucket_name
+  dev_artifacts_bucket_name            = var.dev_artifacts_bucket_name
+  artifacts_bucket_name                = var.artifacts_bucket_name
+  ecr_repository_name                  = var.ecr_repository_name
+  platform_lambdas_ecr_repository_name = var.platform_lambdas_ecr_repository_name
+  model_ids                            = var.model_ids
+  ecr_pull_account_ids                 = var.deployment_account_ids
+  break_glass_principal_arns           = var.break_glass_principal_arns
+  kms_key_arn                          = module.kms.key_arn
+  tags                                 = var.tags
 }
 
 module "secrets" {
@@ -74,31 +87,9 @@ module "registry" {
   source = "../../modules/registry"
 
   model_package_group_name = var.model_package_group_name
-  description              = "ML Platform shared model registry"
+  description              = "ML NonProd model registry"
   spoke_account_ids        = var.spoke_account_ids
   tags                     = var.tags
-}
-
-module "governance" {
-  source = "../../modules/governance"
-
-  name_prefix                     = var.name_prefix
-  model_package_group_name        = var.model_package_group_name
-  lambda_source_dir               = "${path.module}/.build"
-  deploy_parameter_prefix         = "/${var.name_prefix}/deploy"
-  kms_key_arn                     = module.kms.key_arn
-  enable_auto_deploy              = var.enable_auto_deploy
-  github_owner                    = var.github_owner
-  github_repo                     = var.github_repo
-  github_token_secret_arn         = coalesce(module.secrets.github_dispatch_secret_arn, "")
-  governance_lambda_role_arn      = var.governance_lambda_role_arn
-  github_dispatch_lambda_role_arn = var.github_dispatch_lambda_role_arn
-  tags                            = var.tags
-
-  depends_on = [
-    data.archive_file.capture_approval_lambda,
-    data.archive_file.github_dispatch_lambda,
-  ]
 }
 
 module "sns" {
@@ -107,6 +98,64 @@ module "sns" {
   name_prefix = var.name_prefix
   kms_key_arn = module.kms.key_arn
   tags        = var.tags
+}
+
+module "governance" {
+  source = "../../modules/governance"
+
+  name_prefix                     = var.name_prefix
+  model_package_group_name        = ""
+  lambda_source_dir               = "${path.module}/.build"
+  deploy_parameter_prefix         = "/${var.name_prefix}/deploy"
+  kms_key_arn                     = module.kms.key_arn
+  artefact_bucket_name            = module.storage.artefact_store_bucket_name
+  evidence_bucket_name            = module.storage.evidence_bucket_name
+  training_account_ids            = var.training_account_ids
+  spoke_account_ids               = var.training_account_ids
+  source_read_role_name           = var.source_read_role_name
+  lambda_subnet_ids               = module.network.subnet_ids
+  lambda_security_group_ids       = [module.network.sagemaker_security_group_id]
+  alarm_actions                   = [module.sns.alerts_topic_arn]
+  violation_topic_arn             = module.sns.alerts_topic_arn
+  enable_auto_deploy              = var.enable_auto_deploy
+  github_owner                    = var.github_owner
+  github_repo                     = var.github_repo
+  github_token_secret_arn         = coalesce(module.secrets.github_dispatch_secret_arn, "")
+  governance_lambda_role_arn      = var.governance_lambda_role_arn
+  registration_lambda_role_arn    = var.registration_lambda_role_arn
+  github_dispatch_lambda_role_arn = var.github_dispatch_lambda_role_arn
+  capture_approval_image_uri      = module.platform_lambda_uris.capture_approval
+  register_candidate_image_uri    = module.platform_lambda_uris.register_candidate
+  github_dispatch_image_uri       = module.platform_lambda_uris.github_dispatch
+  tags                            = var.tags
+
+  depends_on = [
+    data.archive_file.capture_approval_lambda,
+    data.archive_file.github_dispatch_lambda,
+  ]
+}
+
+module "management_api" {
+  source = "../../modules/management_api"
+  count  = var.enable_management_api ? 1 : 0
+
+  name_prefix                = var.name_prefix
+  vpc_endpoint_ids           = compact([module.network.execute_api_vpc_endpoint_id])
+  okta_issuer                = var.okta_issuer
+  okta_audience              = var.okta_audience
+  okta_authorizer_image_uri  = module.platform_lambda_uris.okta_authorizer
+  approval_api_image_uri     = module.platform_lambda_uris.approval_api
+  authorizer_lambda_role_arn = var.authorizer_lambda_role_arn
+  approval_lambda_role_arn   = var.approval_lambda_role_arn
+  lifecycle_table_name       = module.governance.lifecycle_table_name
+  decision_log_table_name    = module.governance.decision_log_table_name
+  identity_table_name        = module.governance.identity_table_name
+  locks_table_name           = module.governance.locks_table_name
+  waf_web_acl_arn            = var.waf_web_acl_arn
+  lambda_subnet_ids          = module.network.subnet_ids
+  lambda_security_group_ids  = [module.network.sagemaker_security_group_id]
+  alarm_actions              = [module.sns.alerts_topic_arn]
+  tags                       = var.tags
 }
 
 module "credit_risk_pipeline" {
@@ -127,65 +176,24 @@ module "credit_risk_pipeline" {
   tags                     = var.tags
 }
 
-module "pipeline_trigger" {
-  source = "../../modules/step_functions"
-
-  name_prefix   = var.name_prefix
-  pipeline_name = "credit-risk"
-  sfn_role_arn  = var.step_functions_role_arn
-  tags          = var.tags
-}
-
 module "cloudwatch" {
   source = "../../modules/cloudwatch"
 
   name_prefix    = var.name_prefix
-  pipeline_names = ["credit-risk"]
+  pipeline_names = ["demo-credit-risk"]
   tags           = var.tags
 }
 
 module "stage_analytics" {
   source = "../../modules/stage_analytics"
 
-  name_prefix            = var.name_prefix
-  governance_table_name  = module.governance.governance_table_name
-  governance_table_arn   = module.governance.governance_table_arn
-  kms_key_arn            = module.kms.key_arn
-  spill_bucket_name      = var.athena_spill_bucket_name
-  export_lambda_role_arn = var.stage_export_lambda_role_arn
-  quicksight_user_arn    = var.quicksight_user_arn
-  tags                   = var.tags
-}
-
-module "bu_endpoints" {
-  source = "../../modules/bu_endpoints"
-  count  = var.enable_bu_endpoints ? 1 : 0
-
-  name_prefix           = var.name_prefix
-  business_units        = var.business_units
-  inference_role_arn    = var.inference_role_arn
-  subnet_ids            = module.network.subnet_ids
-  security_group_ids    = [module.network.sagemaker_security_group_id]
-  artifacts_bucket_name = module.storage.artifacts_bucket_name
-  kms_key_arn           = module.kms.key_arn
-  enable_api_gateway    = false
-  tags                  = var.tags
-}
-
-module "dev_test_endpoint" {
-  source = "../../modules/endpoint"
-  count  = var.create_dev_test_endpoint ? 1 : 0
-
-  name_prefix         = var.name_prefix
-  model_package_arn   = var.dev_test_model_package_arn
-  endpoint_name       = "${var.name_prefix}-credit-risk-test"
-  inference_role_arn  = var.inference_role_arn
-  subnet_ids          = module.network.subnet_ids
-  security_group_ids  = [module.network.sagemaker_security_group_id]
-  instance_type       = "ml.m5.large"
-  instance_count      = 1
-  enable_data_capture = true
-  data_capture_s3_uri = "s3://${module.storage.artifacts_bucket_name}/data-capture/${var.name_prefix}-credit-risk-test"
-  kms_key_id          = module.kms.key_arn
-  tags                = var.tags
+  name_prefix                 = var.name_prefix
+  governance_table_name       = module.governance.governance_table_name
+  governance_table_arn        = module.governance.governance_table_arn
+  kms_key_arn                 = module.kms.key_arn
+  spill_bucket_name           = var.athena_spill_bucket_name
+  export_lambda_role_arn      = var.stage_export_lambda_role_arn
+  governance_export_image_uri = module.platform_lambda_uris.governance_export
+  quicksight_user_arn         = var.quicksight_user_arn
+  tags                        = var.tags
 }

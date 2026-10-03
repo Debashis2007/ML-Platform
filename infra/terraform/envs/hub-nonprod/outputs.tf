@@ -36,3 +36,31 @@ output "kms_key_arn" {
 output "governance_table_name" {
   value = module.governance.governance_table_name
 }
+
+output "decision_log_table_name" {
+  value = module.governance.decision_log_table_name
+}
+
+output "lifecycle_table_name" {
+  value = module.governance.lifecycle_table_name
+}
+
+output "artefact_store_bucket_name" {
+  value = module.storage.artefact_store_bucket_name
+}
+
+output "evidence_bucket_name" {
+  value = module.storage.evidence_bucket_name
+}
+
+output "model_ecr_repository_urls" {
+  value = module.storage.model_ecr_repository_urls
+}
+
+output "management_api_url" {
+  value = try(module.management_api[0].invoke_url, null)
+}
+
+output "hub_event_bus_arn" {
+  value = module.governance.hub_event_bus_arn
+}

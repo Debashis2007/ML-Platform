@@ -1,16 +1,21 @@
 # Central Plane — architecture map
 
-Maps the **ML Platform Central Plane** PPT (`ML_Platform_Central_Plane.pptx`) onto this repository.
+Maps the **ML Platform** deployment onto **Control Plane** accounts (control plane architecture deck).
 
-## Accounts (PPT slide 1)
+## Accounts (Wave-1)
 
-| Plane | Terraform root | Role |
-|-------|----------------|------|
-| **NONPROD Central Plane** | `infra/terraform/envs/hub-nonprod/` | Registry (DEV/TEST), S3 artifacts, ECR, Stage Governance, Athena/QS exports, DEV BU endpoints **without** API Gateway |
-| **PROD Central Plane** | `infra/terraform/envs/hub-prod/` | PROD registry, Stage Governance, promote Lambda, BU endpoints **with** API Gateway |
-| **Per-BU deploy workspace** | `infra/terraform/envs/deploy-endpoint/` | Single BU endpoint; `enable_api_gateway=false` in Non-Prod, `true` in Prod |
+**ML Platform deploys into `Control-{env}`** (Launchpad Control Plane) — not separate ML-only accounts for Wave-1.
 
-Orchestration: `.github/workflows/admin-run.yml` (Admin-Run).
+Account inventory, human roles, service roles, and checklist: [`ACCOUNTS_AND_ROLES.md`](./ACCOUNTS_AND_ROLES.md).
+
+| AWS account | Terraform root | Role |
+|----------------|----------------|------|
+| **Control-NonProd** (`848973819860`) | `infra/terraform/envs/hub-nonprod/` | Registry (DEV/TEST), S3, ECR, Stage Governance, DEV BU endpoints **without** API Gateway |
+| **Control-Prod** (`762794225431`) | `infra/terraform/envs/hub-prod/` | PROD registry, promote Lambda, BU endpoints **with** API Gateway + WAF |
+| **Same Control account** (per target plane) | `infra/terraform/envs/deploy-endpoint/` | Single BU endpoint deploy |
+| **BU-{name}-{env}** (Wave-1: invoke only) | — | Apps consume ML; RAM via `spoke_account_ids` when BU accounts exist |
+
+Orchestration: `.github/workflows/ml-lifecycle.yml` (train · promote · deploy) and `.github/workflows/platform-infra.yml` (CI→ECR→CD · deploy-bu).
 
 ## Stage Governance (flows 3–6 / 11–14)
 
@@ -37,10 +42,10 @@ Business units default map: BU1, BU2, BU3, BU4.
 
 ```text
 Non-Prod registry Approved
-  → governance event / model-promote.yml
-  → promote_model_package Lambda (Prod account)
+  → governance event / ml-lifecycle.yml (promote job)
+  → promote_model_package Lambda (Control Prod account)
   → Prod Model Package Group (Approved)
-  → admin-run deploy-bu (plane=prod)
+  → ml-lifecycle.yml (deploy job) or platform-infra deploy-bu
 ```
 
 ## Feature Store
@@ -50,8 +55,8 @@ Phase 2 (ASM-ML-02). Wave-1 uses optional `steps.features` in `pipeline.yaml` on
 ## Apply order
 
 ```text
-Pass 1a  hub-nonprod   (+ stage_analytics, optional bu_endpoints)
-Pass 1b  hub-prod      (+ stage_analytics, promote, optional bu_endpoints)
-Pass 2   deploy-endpoint / admin-run deploy-bu
-Promote  model-promote.yml after Non-Prod approval
+Pass 1a  hub-nonprod   (+ stage_analytics, optional bu_endpoints)  → Control-NonProd
+Pass 1b  hub-prod      (+ stage_analytics, promote, optional bu_endpoints)  → Control-Prod
+Pass 2   deploy-endpoint / platform-infra deploy-bu
+Promote  ml-lifecycle.yml (promote job) after Non-Prod approval
 ```

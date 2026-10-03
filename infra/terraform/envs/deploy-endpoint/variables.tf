@@ -24,7 +24,7 @@ variable "enable_vpc_endpoints" {
 
 variable "model_package_arn" {
   type        = string
-  description = "Approved model package ARN from Workflow B trigger."
+  description = "Model package ARN approved through the management API (release workflow input)."
 }
 
 variable "endpoint_name" {
@@ -55,19 +55,21 @@ variable "instance_type" {
 }
 
 variable "instance_count" {
-  type    = number
-  default = 1
+  type        = number
+  default     = 2
+  description = "Initial and minimum instances; LIVE requires at least 2."
 }
 
-variable "enable_multi_az" {
-  type    = bool
-  default = false
+variable "max_instance_count" {
+  type    = number
+  default = 4
 }
+
 
 variable "enable_api_gateway" {
   type        = bool
-  description = "true = Prod front door. false = Non-Prod DEV (direct SageMaker invoke only)."
-  default     = true
+  description = "Private invoke API in the target account. Default off: consumers call SageMaker runtime through the VPC endpoint."
+  default     = false
 }
 
 variable "business_unit" {
@@ -82,16 +84,7 @@ variable "enable_api_iam_auth" {
   default     = true
 }
 
-variable "enable_waf" {
-  type        = bool
-  default     = true
-  description = "Associate a regional WAFv2 Web ACL with the API stage."
-}
 
-variable "waf_rate_limit" {
-  type    = number
-  default = 2000
-}
 
 variable "kms_key_arn" {
   type        = string
@@ -160,4 +153,43 @@ variable "alarm_actions" {
 variable "tags" {
   type    = map(string)
   default = { ManagedBy = "terraform" }
+}
+
+# --- Design v7 release ---
+
+variable "environment" {
+  type        = string
+  description = "qa (ALL_AT_ONCE) or live (CANARY 10%, 15-minute bake)."
+}
+
+variable "release_id" {
+  type        = string
+  description = "Unique per release; names the model and endpoint configuration."
+}
+
+variable "target_role_arn" {
+  type        = string
+  default     = ""
+  description = "Optional deploy role in the target account to assume (client-managed)."
+}
+
+variable "waf_web_acl_arn" {
+  type        = string
+  default     = ""
+  description = "Optional Web ACL for the invoke API stage (replaceable protection hook)."
+}
+
+variable "bu" {
+  type    = string
+  default = ""
+}
+
+variable "project" {
+  type    = string
+  default = "ml-platform"
+}
+
+variable "platform_version" {
+  type    = string
+  default = "v1.0.0"
 }

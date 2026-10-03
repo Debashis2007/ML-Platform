@@ -8,12 +8,12 @@ from sagemaker.workflow.parameters import ParameterString
 from sagemaker.workflow.properties import PropertyFile
 from sagemaker.workflow.steps import ProcessingStep, TrainingStep
 
-from ml_platform.config import PipelineConfig
-from ml_platform.steps.common import script_path
+from ml_platform.config import ModelConfig
+from ml_platform.steps.common import resource_tags, script_path
 
 
 def build_evaluate_step(
-    cfg: PipelineConfig,
+    cfg: ModelConfig,
     *,
     role_arn: str | None,
     train_step: TrainingStep,
@@ -29,7 +29,8 @@ def build_evaluate_step(
         instance_type=instance_type,
         instance_count=1,
         role=role_arn,
-        env={"TARGET_COLUMN": cfg.target_column, "MODEL_NAME": cfg.model_name},
+        env={"TARGET_COLUMN": cfg.target_column, "MODEL_NAME": cfg.model_id},
+        tags=resource_tags(cfg.tags()),
     )
     evaluation_report = PropertyFile(
         name="EvaluationReport",
@@ -63,7 +64,7 @@ def build_evaluate_step(
             )
         ],
         property_files=[evaluation_report],
-        code=script_path(cfg.model_name, "evaluate.py"),
-        job_arguments=["--target-column", cfg.target_column, "--model-name", cfg.model_name],
+        code=script_path(cfg.model_id, "evaluate.py"),
+        job_arguments=["--target-column", cfg.target_column, "--model-name", cfg.model_id],
     )
     return step, evaluation_report

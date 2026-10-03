@@ -1,0 +1,59 @@
+# ML Platform — model configuration (design v7 schema).
+# Edit model, data, steps, evaluation, serving, deployment and approvers.
+# The aws block selects the training target; it never creates roles or infrastructure.
+model:
+  id: REPLACE_MODEL_ID
+  tenant_id: REPLACE_TENANT_ID
+  bu: REPLACE_BU
+  type: bu_specific
+  project: REPLACE_MODEL_ID
+  platform_version: v1.0.0
+
+aws:
+  training_target: control_plane   # control_plane (POC) | bu (v7 target state)
+  account_id: "000000000000"
+  region: us-east-1
+  pipeline_role_arn: arn:aws:iam::000000000000:role/REPLACE_PIPELINE_ROLE
+  prod:                       # Prod retrain after promotion by digest
+    account_id: "000000000000"
+    pipeline_role_arn: arn:aws:iam::000000000000:role/REPLACE_PIPELINE_ROLE
+    train_uri: s3://REPLACE_PROD_DATA_BUCKET/REPLACE_MODEL_ID/train/
+
+data:
+  train_uri: s3://REPLACE_DATA_BUCKET/REPLACE_MODEL_ID/train/
+  target_column: default
+
+steps:
+  prepare:
+    enabled: false
+  train:
+    enabled: true
+    instance: ml.m5.xlarge
+    max_runtime: 4h
+    framework_version: "1.2-1"
+  evaluate:
+    enabled: true
+    instance: ml.m5.xlarge
+
+evaluation:
+  metrics: [auc]
+  thresholds:
+    auc: 0.75
+
+registry:
+  model_package_group: REPLACE_MODEL_PACKAGE_GROUP
+
+serving:
+  contract_version: "1.0"
+  instance: ml.m5.large
+  instance_count: 2
+
+deployment:
+  targets:
+    - { account: REPLACE_BU-nonprod, account_id: "000000000000", environment: qa, instance_count: 1 }
+    - { account: REPLACE_BU-prod, account_id: "000000000000", environment: live, instance_count: 2 }
+
+approvers:
+  - REPLACE_APPROVER_EMAIL
+
+monitoring: config/monitoring.yaml

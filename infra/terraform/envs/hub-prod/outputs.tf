@@ -6,10 +6,6 @@ output "sns_alerts_topic_arn" {
   value = module.sns.alerts_topic_arn
 }
 
-output "deploy_trigger_arn" {
-  value = module.deploy_trigger.state_machine_arn
-}
-
 output "prod_pipeline_config" {
   value = module.credit_risk_pipeline_prod.pipeline_config
 }
@@ -52,10 +48,14 @@ output "athena_jdbc_hint" {
   value = try(module.stage_analytics[0].athena_jdbc_hint, null)
 }
 
-output "bu_endpoint_names" {
-  value = try(module.bu_endpoints[0].endpoint_names, {})
+output "management_api_url" {
+  value = try(module.management_api[0].invoke_url, null)
 }
 
-output "bu_api_invoke_urls" {
-  value = try(module.bu_endpoints[0].api_invoke_urls, {})
+output "artefact_store_bucket_name" {
+  value = module.storage.artefact_store_bucket_name
+}
+
+output "model_ecr_repository_urls" {
+  value = module.storage.model_ecr_repository_urls
 }
